@@ -1,6 +1,6 @@
 /* eLectura · service worker: la app abre sin internet.
    Al publicar cambios, sube VERSION (ver GUIA_PERSONAL.md). */
-const VERSION = 'electura-v1.0.0';
+const VERSION = 'electura-v1.0.1';
 const SHELL = ['./', 'index.html', 'app.js', 'services.js', 'config.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 const CDN_HOSTS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];

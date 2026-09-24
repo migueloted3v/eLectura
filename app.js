@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {

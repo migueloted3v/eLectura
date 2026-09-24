@@ -28,7 +28,7 @@
         var t = db.transaction(store, mode);
         var s = t.objectStore(store);
         var out = fn(s);
-        t.oncomplete = function () { resolve(out && out.result !== undefined ? out.result : out); };
+        t.oncomplete = function () { resolve(out ? out.result : undefined); };
         t.onerror = function () { reject(t.error); };
         t.onabort = function () { reject(t.error); };
       });

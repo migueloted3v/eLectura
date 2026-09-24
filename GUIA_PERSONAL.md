@@ -65,6 +65,8 @@ iCloud funciona sin configurar nada. Google Drive necesita un permiso de Google:
 
 Al conectar por primera vez, Google mostrará un aviso de "app no verificada". Es normal porque es tu app en modo prueba: **Avanzado → Ir a eLectura**. El permiso es de **solo lectura**: la app nunca modifica tus archivos. La sesión dura alrededor de una hora; después pide conectar de nuevo.
 
+> **Ojo con las comillas:** en `config.js` cada valor de texto va entre comillas dobles, por ejemplo `DRIVE_FOLDER: "eBooks",`. Sin comillas el archivo no se puede leer.
+
 ## 6. Pruebas de la v1
 
 Hazlas en al menos un iPhone y un Android.

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F4EEDF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="eLectura">
+<title>eLectura</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600&family=Work+Sans:wght@400;500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+:root{
+  --bg:#F4EEDF;--fg:#2B2620;--ui:#E6DDC8;--muted:#62574A;--sheet:#FBF7EE;--line:#CBBFA6;--accent:#9A5B2E;--accentInk:#FBF7EE;
+  --sans:'Work Sans',system-ui,-apple-system,sans-serif;--serif:'Literata',Georgia,serif;
+  --safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:16px;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+body{overscroll-behavior-y:none}
+#root{min-height:100%}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{cursor:default;opacity:.6}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+p{margin:0;line-height:1.5}
+code{font-size:.9em;background:var(--ui);padding:1px 4px;border-radius:4px}
+
+/* Pantallas */
+.screen{min-height:100vh;padding-top:var(--safe-top);padding-bottom:calc(24px + var(--safe-bottom));max-width:640px;margin:0 auto}
+.content{padding:8px 20px 0;display:flex;flex-direction:column;gap:18px}
+.topbar{height:56px;display:flex;align-items:center;gap:4px;padding:0 8px;border-bottom:1px solid var(--line)}
+.topbar-title{margin:0;font-family:var(--serif);font-size:24px;font-weight:600;flex:1}
+.lib-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 4px;border-bottom:1px solid var(--line)}
+.display{margin:0;font-family:var(--serif);font-size:30px;font-weight:600;line-height:1.15}
+.h2{margin:0;font-size:17px;font-weight:600}
+.section{margin:6px 0 -8px;font-size:14px;font-weight:600;color:var(--muted)}
+.lead{font-size:17px;line-height:1.55}
+
+/* Utilidades */
+.muted{color:var(--muted)}.small{font-size:13px}.tiny{font-size:12px}.strong{font-weight:600}.big{font-size:18px}
+.serif{font-family:var(--serif)}.italic{font-style:italic}.center{text-align:center}.left{text-align:left}.right{text-align:right}
+.grow{flex:1 1 0;min-width:0}.ellipsis{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stack{display:flex;flex-direction:column;gap:12px}.stack-sm{display:flex;flex-direction:column;gap:6px}.stack-xs{display:flex;flex-direction:column;gap:2px}
+.row-between{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.row-inline{display:flex;align-items:center;gap:8px}.row-inline.baseline{align-items:baseline}.row-inline.wrap{flex-wrap:wrap}
+.row-gap{display:flex;gap:10px;align-items:stretch}
+.link{color:var(--accent);font-weight:600}
+.error{color:#A33A2B}
+.center-fill{min-height:60vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
+.field-label{font-size:13px;color:var(--muted);margin-bottom:-6px}
+
+/* Botones */
+.btn{min-height:48px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:transparent;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:15px;text-decoration:none;color:var(--fg)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accentInk)}
+.btn.dashed{border:1.5px dashed var(--accent);color:var(--accent)}
+.btn.danger{color:#A33A2B;border-color:#D8B3AA}
+.btn.sm{min-height:40px;padding:0 12px;font-size:13px;flex-shrink:0}
+.icon-btn{width:44px;height:44px;border:none;background:transparent;border-radius:22px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);flex-shrink:0}
+.icon-btn.sm{width:36px;height:36px}
+.icon-btn.filled{background:var(--ui);color:var(--fg)}
+.icon-spacer{width:44px;flex-shrink:0}
+.sq-btn{width:44px;height:44px;border-radius:10px;border:1px solid var(--line);background:transparent;font-family:var(--serif);font-size:14px}
+.sq-btn.big{font-size:20px}
+.num{min-width:30px;text-align:center;font-size:14px}
+.avatar{width:44px;height:44px;border-radius:22px;display:inline-flex;align-items:center;justify-content:center;color:#FBF7EE;font-weight:600;flex-shrink:0;border:none}
+.dashed-avatar{background:transparent;border:1.5px dashed var(--accent);color:var(--accent);font-size:20px}
+.segmented{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex-shrink:0}
+.segmented button{flex:1 1 0;min-height:40px;padding:0 12px;border:none;background:transparent;font-size:13px;white-space:nowrap}
+.segmented button.on{background:var(--fg);color:var(--bg)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.chip{min-height:40px;padding:0 14px;border-radius:20px;border:1px solid var(--line);background:transparent;font-size:13px;font-weight:500;white-space:nowrap;flex-shrink:0}
+.chip.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.toggle{width:52px;height:32px;border-radius:16px;border:none;background:var(--line);padding:3px;display:flex;flex-shrink:0;transition:background .15s}
+.toggle span{width:26px;height:26px;border-radius:13px;background:#FBF7EE;transition:transform .15s}
+.toggle.on{background:var(--accent)}.toggle.on span{transform:translateX(20px)}
+.radio{width:22px;height:22px;border-radius:11px;border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.radio.on::after{content:"";width:10px;height:10px;border-radius:5px;background:var(--accent)}
+
+/* Tarjetas y listas */
+.card{background:var(--sheet);border:1px solid var(--line);border-radius:16px}
+.card.pad{padding:16px}
+.card.list{padding:4px 14px;display:flex;flex-direction:column}
+.row{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 0;border-bottom:1px solid var(--ui)}
+.card.list>.row:last-child,.card.list>.row-note:last-child{border-bottom:none}
+.row.col{flex-direction:column;align-items:stretch;gap:8px}
+.row-btn{width:100%;background:transparent;border:none;border-bottom:1px solid var(--ui);text-align:left}
+.row-btn.selected{background:var(--ui);border-radius:10px;padding-left:8px;padding-right:8px}
+.row-note{padding:6px 0 10px}
+.swatch{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);flex-shrink:0}
+.result{min-height:72px}
+.thumb{width:40px;height:56px;border-radius:4px;object-fit:cover;flex-shrink:0;display:block}
+.input{min-height:48px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--sheet);font-size:16px;min-width:0}
+.input.select{padding:0 8px;font-size:14px}
+.input.time{min-height:40px;font-size:15px;padding:0 8px}
+.notice{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:12px;background:var(--bg);font-size:14px;line-height:1.45}
+.notice svg{flex-shrink:0;color:var(--accent)}
+.bar{display:block;height:6px;border-radius:3px;background:var(--ui);overflow:hidden}
+.bar span{display:block;height:100%;background:var(--accent);border-radius:3px}
+.empty{padding:28px 8px;text-align:center;color:var(--muted)}
+
+/* Biblioteca */
+.continue{display:flex;gap:14px;align-items:center;padding:14px;text-align:left;width:100%}
+.book-title{font-family:var(--serif);font-size:18px;font-weight:600;line-height:1.25}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.book-cell{display:flex;flex-direction:column;gap:4px;min-width:0}
+.cover-btn{position:relative;border:none;background:transparent;padding:0;display:block;width:100%}
+.cover{width:100%;border-radius:6px;object-fit:cover;display:flex}
+.continue .cover{width:72px;flex-shrink:0}
+.cover-text{align-items:flex-end;padding:10px;color:#F4E6CF;font-family:var(--serif);font-size:13px;line-height:1.25;text-align:left;overflow:hidden}
+.cover-pdf{flex-direction:column;justify-content:space-between;padding:10px;background:var(--ui);border:1px solid var(--line);font-size:12px;text-align:left;overflow:hidden;word-break:break-word}
+.badge{position:absolute;left:6px;bottom:6px;display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:10px;background:rgba(29,25,21,.82);color:#F4EEDF;font-size:11px}
+.badge svg{width:14px;height:14px}
+
+/* Hojas inferiores */
+.sheet-backdrop{position:fixed;inset:0;background:rgba(20,15,10,.28);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:640px;max-height:88vh;overflow:auto;background:var(--sheet);border-radius:22px 22px 0 0;padding:18px 20px calc(24px + var(--safe-bottom));display:flex;flex-direction:column;gap:14px;box-shadow:0 -8px 28px rgba(40,30,20,.2);animation:up .18s ease-out}
+@keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+.sheet-title{font-family:var(--serif);font-size:20px;font-weight:600}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.mode-btn{min-height:52px;border-radius:12px;border:2px solid var(--line);background:var(--ui);font-size:14px;font-weight:600}
+.mode-btn.on{border-color:var(--accent)}
+input[type=range]{width:100%;accent-color:var(--accent);height:32px}
+.lookup-word{font-family:var(--serif);font-size:26px;font-weight:600}
+.trans-main{font-size:22px;font-weight:600}
+.quote{border-left:none;padding-top:4px;border-top:1px solid var(--ui)}
+
+/* Lector */
+.reader{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg);padding-top:var(--safe-top)}
+.reader-top{height:52px;display:flex;align-items:center;gap:8px;padding:0 8px;border-bottom:1px solid var(--line);transition:opacity .2s}
+.reader-foot{min-height:48px;display:flex;align-items:center;gap:8px;padding:0 8px var(--safe-bottom);transition:opacity .2s}
+.reader-top.hidden,.reader-foot.hidden{opacity:0;pointer-events:none}
+.reader-title{flex:1;text-align:center;font-size:13px;color:var(--muted)}
+.aa-btn{width:44px;height:44px;border:none;border-radius:22px;background:var(--ui);font-family:var(--serif);font-size:17px}
+.reader-body{flex:1;position:relative;min-height:0}
+.epub-wrap{position:absolute;inset:0}
+.epub-host{width:100%;height:100%}
+.edge{position:absolute;top:0;bottom:0;border:none;background:transparent;padding:0;z-index:2}
+.edge-left{left:0}.edge-right{right:0}
+.pdf-scroll{position:absolute;inset:0;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px 0}
+.pdf-page{width:100%;overflow-x:auto;margin-bottom:8px;text-align:center}
+.pdf-page canvas{display:block;margin:0 auto;height:auto}
+.pdf-scroll .edge{width:22%;position:fixed;top:calc(var(--safe-top) + 52px);bottom:48px}
+
+/* Aviso y capas de comodidad */
+.toast{position:fixed;left:50%;bottom:calc(20px + var(--safe-bottom));transform:translateX(-50%);max-width:min(92vw,520px);background:var(--fg);color:var(--bg);padding:12px 16px;border-radius:12px;font-size:14px;line-height:1.4;z-index:60;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+.overlay-warm,.overlay-dim{position:fixed;inset:0;pointer-events:none;z-index:1000}
+.overlay-warm{mix-blend-mode:multiply}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (min-width:600px){.grid3{grid-template-columns:repeat(4,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<div id="root"><div class="center-fill muted">Cargando…</div></div>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.5/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script>
+  if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+</script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="services.js"></script>
+<script type="text/babel" data-presets="react" src="app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').then(function (reg) {
+        reg.addEventListener('updatefound', function () {
+          var w = reg.installing;
+          w && w.addEventListener('statechange', function () {
+            if (w.state === 'installed' && navigator.serviceWorker.controller) location.reload();
+          });
+        });
+      }).catch(function () {});
+    });
+  }
+</script>
+</body>
+</html>

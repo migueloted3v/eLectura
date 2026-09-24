@@ -1,0 +1,17 @@
+{
+  "name": "eLectura",
+  "short_name": "eLectura",
+  "description": "Lector de EPUB y PDF con brillo cómodo, modos de día, tarde y noche, y consulta de palabras.",
+  "lang": "es-MX",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4EEDF",
+  "theme_color": "#F4EEDF",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

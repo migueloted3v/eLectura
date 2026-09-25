@@ -252,30 +252,48 @@
     });
   }
 
-  /* ---------- Google Drive ---------- */
-  var driveToken = null, driveTokenExp = 0, tokenClient = null;
+  /* ---------- Google Drive ----------
+     Inicio de sesión por redirección (no ventana emergente): funciona dentro
+     de la app instalada en la pantalla de inicio del iPhone. */
+  var TOKEN_KEY = 'electura-drive-token';
+  var driveToken = null, driveTokenExp = 0;
+  try {
+    var saved = JSON.parse(localStorage.getItem(TOKEN_KEY) || 'null');
+    if (saved && saved.exp > Date.now()) { driveToken = saved.token; driveTokenExp = saved.exp; }
+  } catch (e) {}
   function driveConfigured() { return !!CFG.GOOGLE_CLIENT_ID; }
+  function driveRedirectUri() { return location.origin + location.pathname.replace(/index\.html$/, ''); }
+  function driveHasToken() { return !!driveToken && Date.now() < driveTokenExp; }
   function driveConnect() {
-    return new Promise(function (resolve, reject) {
-      if (!driveConfigured()) return reject(new Error('Falta el Client ID de Google en config.js.'));
-      if (!window.google || !google.accounts || !google.accounts.oauth2) return reject(new Error('No cargó el servicio de Google. Revisa tu conexión.'));
-      if (driveToken && Date.now() < driveTokenExp) return resolve(driveToken);
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CFG.GOOGLE_CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/drive.readonly',
-        callback: function (resp) {
-          if (resp.error) return reject(new Error(resp.error));
-          driveToken = resp.access_token;
-          driveTokenExp = Date.now() + (resp.expires_in - 60) * 1000;
-          resolve(driveToken);
-        }
-      });
-      tokenClient.requestAccessToken({ prompt: '' });
-    });
+    if (!driveConfigured()) return Promise.reject(new Error('Falta el Client ID de Google en config.js.'));
+    if (driveHasToken()) return Promise.resolve(driveToken);
+    var url = 'https://accounts.google.com/o/oauth2/v2/auth' +
+      '?client_id=' + encodeURIComponent(CFG.GOOGLE_CLIENT_ID) +
+      '&redirect_uri=' + encodeURIComponent(driveRedirectUri()) +
+      '&response_type=token' +
+      '&scope=' + encodeURIComponent('https://www.googleapis.com/auth/drive.readonly') +
+      '&include_granted_scopes=true&prompt=select_account&state=electura-drive';
+    location.href = url;
+    return new Promise(function () {});
   }
+  // Se llama al abrir la app: si venimos de Google, guarda el permiso y limpia la dirección.
+  function driveCaptureRedirect() {
+    var h = location.hash || '';
+    if (h.indexOf('state=electura-drive') < 0) return null;
+    var p = new URLSearchParams(h.slice(1));
+    history.replaceState(null, '', location.pathname + location.search);
+    if (p.get('error')) return { error: p.get('error') };
+    var token = p.get('access_token');
+    if (!token) return { error: 'sin_token' };
+    driveToken = token;
+    driveTokenExp = Date.now() + (Number(p.get('expires_in') || 3600) - 60) * 1000;
+    try { localStorage.setItem(TOKEN_KEY, JSON.stringify({ token: driveToken, exp: driveTokenExp })); } catch (e) {}
+    return { ok: true };
+  }
+  function driveForget() { driveToken = null; driveTokenExp = 0; try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
   function driveFetch(path) {
     return fetch('https://www.googleapis.com/drive/v3/' + path, { headers: { Authorization: 'Bearer ' + driveToken } })
-      .then(function (r) { if (r.status === 401) { driveToken = null; throw new Error('La sesión de Google expiró. Conecta de nuevo.'); } if (!r.ok) throw new Error('HTTP ' + r.status); return r; });
+      .then(function (r) { if (r.status === 401) { driveForget(); throw new Error('La sesión de Google expiró. Toca Conectar de nuevo.'); } if (!r.ok) throw new Error('HTTP ' + r.status); return r; });
   }
   function driveList(q) {
     var folder = (CFG.DRIVE_FOLDER || 'Libros').replace(/'/g, "\\'");
@@ -327,7 +345,7 @@
     storageInfo: storageInfo, requestPersist: requestPersist, downloadBlob: downloadBlob,
     DEFAULT_SOURCES: DEFAULT_SOURCES, searchGutenberg: searchGutenberg, searchOpenLibrary: searchOpenLibrary, searchOpds: searchOpds,
     define: define, translate: translate,
-    driveConfigured: driveConfigured, driveConnect: driveConnect, driveList: driveList, driveDownload: driveDownload,
+    driveConfigured: driveConfigured, driveConnect: driveConnect, driveHasToken: driveHasToken, driveCaptureRedirect: driveCaptureRedirect, driveRedirectUri: driveRedirectUri, driveForget: driveForget, driveList: driveList, driveDownload: driveDownload,
     exportBackup: exportBackup, importBackup: importBackup
   };
 })();

@@ -59,11 +59,12 @@ iCloud funciona sin configurar nada. Google Drive necesita un permiso de Google:
    - Déjala en modo **Prueba (Testing)**. No hace falta publicarla ni verificarla para uso familiar.
 5. En **Credenciales / Clients**, crea un **ID de cliente de OAuth** tipo **Aplicación web**:
    - **Orígenes de JavaScript autorizados**: `https://TU-USUARIO.github.io` (sin la carpeta y sin `/` al final).
+   - **URIs de redireccionamiento autorizados**: la dirección completa de la app **con** `/` al final, respetando mayúsculas, por ejemplo `https://TU-USUARIO.github.io/eLectura/`. La app te muestra la dirección exacta debajo del botón **Conectar Google Drive**; cópiala de ahí.
 6. Copia el **Client ID** (termina en `.apps.googleusercontent.com`).
 7. En GitHub, abre `config.js` → ícono de lápiz → pégalo en `GOOGLE_CLIENT_ID: "..."` → commit.
 8. En tu Google Drive crea una carpeta llamada **Libros** y sube ahí tus EPUB y PDF.
 
-Al conectar por primera vez, Google mostrará un aviso de "app no verificada". Es normal porque es tu app en modo prueba: **Avanzado → Ir a eLectura**. El permiso es de **solo lectura**: la app nunca modifica tus archivos. La sesión dura alrededor de una hora; después pide conectar de nuevo.
+Al tocar **Conectar Google Drive**, la app se va a la página de Google y regresa sola a tu carpeta. Al conectar por primera vez, Google mostrará un aviso de "app no verificada". Es normal porque es tu app en modo prueba: **Avanzado → Ir a eLectura**. El permiso es de **solo lectura**: la app nunca modifica tus archivos. La sesión dura alrededor de una hora; después pide conectar de nuevo.
 
 > **Ojo con las comillas:** en `config.js` cada valor de texto va entre comillas dobles, por ejemplo `DRIVE_FOLDER: "eBooks",`. Sin comillas el archivo no se puede leer.
 
@@ -112,4 +113,6 @@ Ajustes → Almacenamiento → **Respaldar progreso** genera un `.json`. Guárda
 - **La pantalla se queda en "Cargando…"**: revisa conexión la primera vez (las librerías se descargan una vez y luego quedan guardadas).
 - **"Este sitio no permite descargar desde la app"**: descarga el archivo en el navegador y usa **Abrir archivo**.
 - **Google Drive dice que no encuentra la carpeta**: el nombre debe ser exactamente `Libros` (o cámbialo en `config.js` → `DRIVE_FOLDER`).
-- **Error de origen al conectar Google**: revisa que el origen autorizado sea exactamente `https://TU-USUARIO.github.io`.
+- **Google dice `redirect_uri_mismatch`**: la dirección de regreso registrada no coincide. Copia la que muestra la app bajo el botón Conectar y pégala tal cual en *URIs de redireccionamiento autorizados* (con `/` al final y las mismas mayúsculas). Los cambios en Google tardan unos minutos.
+- **Google dice `access_denied` o "Acceso bloqueado"**: agrega ese Gmail en *Usuarios de prueba*.
+- **La app no abre sin internet**: ábrela una vez con buena señal después de cada actualización; así guarda todo en el cel. Desde la versión 1.0.2 abre al instante aunque no haya señal.

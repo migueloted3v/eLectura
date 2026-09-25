@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -731,17 +731,19 @@ function SearchSource({ source, books, onSaveRemote }) {
   );
 }
 
-function CloudPanel({ books, onImportClick, onSaveBlob }) {
-  const [cloud, setCloud] = useState('icloud');
+function CloudPanel({ books, onImportClick, onSaveBlob, initialCloud }) {
+  const [cloud, setCloud] = useState(initialCloud || 'icloud');
   const [files, setFiles] = useState(null);
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState({});
   const prints = useMemo(() => new Set(books.filter(b => b.hasFile).map(b => b.fingerprint)), [books]);
-  const connect = () => {
-    setStatus('Conectando…');
-    Svc.driveConnect().then(() => Svc.driveList('')).then(f => { setFiles(f); setStatus(''); }).catch(e => setStatus(e.message));
+  const load = () => {
+    setStatus('Leyendo tu carpeta…');
+    Svc.driveList('').then(f => { setFiles(f); setStatus(''); }).catch(e => { setFiles(null); setStatus(e.message); });
   };
+  const connect = () => { setStatus('Abriendo Google…'); Svc.driveConnect().catch(e => setStatus(e.message)); };
+  useEffect(() => { if (cloud === 'gdrive' && files === null && Svc.driveHasToken()) load(); }, [cloud]);
   const search = () => { setStatus('Buscando…'); Svc.driveList(q.trim()).then(f => { setFiles(f); setStatus(''); }).catch(e => setStatus(e.message)); };
   const get = f => {
     setBusy(b => ({ ...b, [f.id]: true }));
@@ -767,6 +769,7 @@ function CloudPanel({ books, onImportClick, onSaveBlob }) {
           <p>Conecta tu cuenta para ver tu carpeta "{CFG.DRIVE_FOLDER || 'Libros'}". La app solo puede leer tus archivos, nunca modificarlos.</p>
           <button type="button" className="btn primary" onClick={connect}>Conectar Google Drive</button>
           {status && <p className="muted small">{status}</p>}
+          <p className="muted tiny">Dirección de regreso registrada en Google Cloud: <code>{Svc.driveRedirectUri()}</code></p>
         </div>
       ) : (
         <div className="stack">
@@ -827,7 +830,7 @@ function AddSource({ onAdd }) {
   );
 }
 
-function Discover({ sources, books, onBack, onSaveRemote, onSaveBlob, onImportClick, onAddSource, onRemoveSource, initialTab }) {
+function Discover({ sources, books, onBack, onSaveRemote, onSaveBlob, onImportClick, onAddSource, onRemoveSource, initialTab, initialCloud }) {
   const [tab, setTab] = useState(initialTab || sources[0].id);
   const src = sources.find(s => s.id === tab);
   const tabs = [...sources.map(s => ({ id: s.id, label: s.name })), { id: 'cloud', label: 'Mi nube' }, { id: 'add', label: '+ Agregar fuente' }];
@@ -840,7 +843,7 @@ function Discover({ sources, books, onBack, onSaveRemote, onSaveBlob, onImportCl
             <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={'chip' + (tab === t.id ? ' on' : '')} onClick={() => setTab(t.id)}>{t.label}</button>
           ))}
         </div>
-        {tab === 'cloud' && <CloudPanel books={books} onImportClick={onImportClick} onSaveBlob={onSaveBlob} />}
+        {tab === 'cloud' && <CloudPanel books={books} onImportClick={onImportClick} onSaveBlob={onSaveBlob} initialCloud={initialCloud} />}
         {tab === 'add' && <AddSource onAdd={s => { onAddSource(s); setTab(s.id); }} />}
         {src && src.type === 'link' && (
           <div className="card pad stack">
@@ -1031,12 +1034,19 @@ function App() {
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(t); }, []);
 
   useEffect(() => {
+    const back = Svc.driveCaptureRedirect();
     Promise.all([Svc.kv.get('profiles', []), Svc.kv.get('currentProfile', null)]).then(([ps, cur]) => {
       setProfiles(ps);
       const id = ps.find(p => p.id === cur) ? cur : (ps[0] && ps[0].id);
       if (id) setPid(id); else setView({ name: 'profiles' });
+      if (id && back) {
+        setView({ name: 'discover', tab: 'cloud', cloud: 'gdrive' });
+        if (back.error) toast(back.error === 'access_denied'
+          ? 'Google no dio acceso. Revisa que tu correo esté en Usuarios de prueba.'
+          : 'Google respondió: ' + back.error);
+      }
       setReady(true);
-    });
+    }).catch(err => { console.error(err); setReady(true); });
     Svc.requestPersist();
   }, []);
 
@@ -1064,7 +1074,7 @@ function App() {
     if (meta) meta.setAttribute('content', pal.bg);
   }, [eff.theme]);
 
-  const go = (name, tab) => setView({ name, tab });
+  const go = (name, tab, cloud) => setView({ name, tab, cloud });
 
   const createProfile = name => {
     const p = { id: Svc.uid(), name, color: PROFILE_COLORS[profiles.length % PROFILE_COLORS.length] };
@@ -1144,7 +1154,7 @@ function App() {
     screen = <Reader book={readerBook} settings={settings} eff={eff} onSettings={setSettings} onExit={exitReader}
       onBookUpdate={m => Svc.updateBook(m)} onSaveWord={saveWord} toast={toast} />;
   } else if (view.name === 'discover') {
-    screen = <Discover sources={sources} books={books} initialTab={view.tab} onBack={() => go('library')} onSaveRemote={saveRemote} onSaveBlob={saveBlob}
+    screen = <Discover sources={sources} books={books} initialTab={view.tab} initialCloud={view.cloud} onBack={() => go('library')} onSaveRemote={saveRemote} onSaveBlob={saveBlob}
       onImportClick={() => fileRef.current.click()} onAddSource={addSource} onRemoveSource={removeSource} />;
   } else if (view.name === 'settings') {
     screen = <Settings settings={settings} onChange={setSettings} profile={profile} profiles={profiles} sources={sources} go={go}

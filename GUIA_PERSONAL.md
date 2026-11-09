@@ -10,6 +10,7 @@ Cómo publicarlo, instalarlo, configurar Google Drive, probarlo y actualizarlo.
 index.html
 app.js
 services.js
+converter.js
 config.js
 sw.js
 manifest.webmanifest
@@ -91,6 +92,12 @@ Hazlas en al menos un iPhone y un Android.
 | 15 | Quitar un libro del cel y volver a abrirlo desde la nube | Retoma donde ibas |
 | 16 | Respaldar y restaurar | El JSON restaura progreso y vocabulario |
 | 17 | Agregar una fuente como Enlace | Aparece como pestaña y abre el sitio |
+| 18 | Abrir un Word (.docx) con títulos e imágenes | Ofrece convertir; el EPUB respeta capítulos e imágenes |
+| 19 | Abrir un PDF de novela → Convertir → Sí, borrar | Queda solo el EPUB, con párrafos bien armados |
+| 20 | Menú ⋯ de un PDF → Convertir → Conservar ambos | Quedan el PDF y el EPUB |
+| 21 | PDF escaneado → Convertir | Avisa que no se puede y ofrece abrirlo como PDF |
+| 22 | Descargar EPUB en iPhone | Abre el menú para Guardar en Archivos |
+| 23 | Consultar una palabra en un EPUB convertido | Funciona igual que en cualquier EPUB |
 
 Anota lo que falle con el número de prueba y el modelo de celular.
 

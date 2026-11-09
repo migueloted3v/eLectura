@@ -9,7 +9,7 @@ window.ELECTURA_CONFIG = {
   DRIVE_FOLDER: "eBooks",
 
   // Opcional: tu correo para MyMemory (sube el límite diario de traducciones).
-  MYMEMORY_EMAIL: "migueloteh@gmail.com",
+  MYMEMORY_EMAIL: "miguelotehg@gmail.com",
 
   // Idioma al que se traduce una palabra seleccionada.
   TRANSLATE_TO: "es-MX"

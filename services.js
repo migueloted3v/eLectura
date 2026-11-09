@@ -67,8 +67,11 @@
       return withTimeout(book.coverUrl(), 8000).catch(function () { return null; }).then(function (url) {
         var coverP = url ? fetch(url).then(function (r) { return r.blob(); }).catch(function () { return null; }) : Promise.resolve(null);
         return coverP.then(function (cover) {
-          try { book.destroy(); } catch (e) {}
-          return { title: m.title, author: m.creator, lang: langCode(m.language), cover: cover };
+          // Espera a que epub.js termine de leer el índice antes de cerrarlo (evita errores sueltos).
+          return withTimeout(book.loaded.navigation, 8000).catch(function () {}).then(function () {
+            try { book.destroy(); } catch (e) {}
+            return { title: m.title, author: m.creator, lang: langCode(m.language), cover: cover };
+          });
         });
       });
     });

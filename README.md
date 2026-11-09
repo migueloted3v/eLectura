@@ -33,13 +33,21 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 - Guarda palabras en Mi vocabulario junto con la frase donde aparecieron.
 - Solo las consultas usan internet; la lectura no.
 
+**Convertir Word o PDF a EPUB**
+- Al abrir un Word (.docx) o un PDF, la app ofrece convertirlo a EPUB; también desde el menú ⋯ de cualquier PDF de la biblioteca.
+- Word: conserva capítulos (según los títulos del documento), negritas, listas, tablas e imágenes.
+- PDF (en prueba): reconstruye párrafos y capítulos, quita números de página y encabezados repetidos. Pierde columnas, tablas y diseño. Los PDF escaneados no se pueden convertir.
+- Al terminar pregunta si borrar el PDF original; si no decides, se conservan los dos.
+- Descargar EPUB: en iPhone abre el menú para guardarlo en Archivos (iCloud) o Google Drive.
+- Todo ocurre en el dispositivo, sin internet (el convertidor de Word se descarga la primera vez y queda guardado).
+
 **Respaldo**
 - Exporta e importa un archivo JSON con perfiles, progreso, ajustes, fuentes y vocabulario (no incluye los libros).
 
 ## Tecnología
 
 - HTML estático con React 18 y JSX compilado en el navegador (Babel), sin paso de build.
-- epub.js para EPUB y pdf.js para PDF.
+- epub.js para EPUB y pdf.js para PDF; mammoth.js y JSZip para convertir Word y PDF a EPUB.
 - IndexedDB para libros y datos; service worker para uso sin internet.
 - Google Identity Services y Drive API (solo lectura) para Google Drive.
 - Se publica en GitHub Pages.
@@ -51,12 +59,14 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 | `index.html` | Estructura, estilos y carga de librerías |
 | `app.js` | Toda la interfaz |
 | `services.js` | Almacenamiento, lectura de archivos, búsquedas, diccionario y Google Drive |
+| `converter.js` | Conversión de Word y PDF a EPUB |
 | `config.js` | Configuración editable (Client ID de Google, carpeta de Drive) |
 | `sw.js` | Uso sin internet y actualizaciones |
 | `manifest.webmanifest`, `icons/` | Instalación en la pantalla de inicio |
 
 ## Limitaciones conocidas
 
+- Los .doc antiguos (Word 97-2003) no se convierten; hay que guardarlos como .docx.
 - Libros con DRM (Kindle, préstamos de Open Library) no se pueden abrir.
 - En PDF no hay consulta de palabras ni cambio real de tamaño de letra (solo zoom).
 - Algunos sitios no permiten descargar desde otra página; en ese caso la app abre el sitio para bajar el archivo manualmente.

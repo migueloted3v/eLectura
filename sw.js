@@ -1,14 +1,15 @@
 /* eLectura · service worker.
    La app abre al instante desde lo guardado en el cel (con o sin internet)
    y se actualiza en segundo plano. Al publicar cambios, sube VERSION. */
-const VERSION = 'electura-v1.0.2';
-const SHELL = ['./', 'index.html', 'app.js', 'services.js', 'config.js', 'manifest.webmanifest',
+const VERSION = 'electura-v1.1.0';
+const SHELL = ['./', 'index.html', 'app.js', 'services.js', 'converter.js', 'config.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 const LIBS = [
   'https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js',
   'https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js',
   'https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.5/babel.min.js',
   'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
+  'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js',
   'https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js',
   'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js',
   'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js',

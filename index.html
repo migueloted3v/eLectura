@@ -131,6 +131,11 @@ input[type=range]{width:100%;accent-color:var(--accent);height:32px}
 .lookup-word{font-family:var(--serif);font-size:26px;font-weight:600}
 .trans-main{font-size:22px;font-weight:600}
 .quote{border-left:none;padding-top:4px;border-top:1px solid var(--ui)}
+.file-tag{width:44px;height:56px;flex-shrink:0;border-radius:6px;background:var(--ui);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--muted)}
+.stats{gap:8px}.stat{padding:10px;border-radius:10px;background:var(--bg);display:flex;flex-direction:column;gap:2px}.stat strong{font-size:18px}
+.btn.dark{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.bar-indeterminate{width:40%!important;animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
 
 /* Lector */
 .reader{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg);padding-top:var(--safe-top)}
@@ -150,7 +155,7 @@ input[type=range]{width:100%;accent-color:var(--accent);height:32px}
 .pdf-scroll .edge{width:22%;position:fixed;top:calc(var(--safe-top) + 52px);bottom:48px}
 
 /* Aviso y capas de comodidad */
-.toast{position:fixed;left:50%;bottom:calc(20px + var(--safe-bottom));transform:translateX(-50%);max-width:min(92vw,520px);background:var(--fg);color:var(--bg);padding:12px 16px;border-radius:12px;font-size:14px;line-height:1.4;z-index:60;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+.toast{position:fixed;left:50%;top:calc(12px + var(--safe-top));transform:translateX(-50%);max-width:min(92vw,520px);background:var(--fg);color:var(--bg);padding:12px 16px;border-radius:12px;font-size:14px;line-height:1.4;z-index:60;box-shadow:0 6px 20px rgba(0,0,0,.2)}
 .overlay-warm,.overlay-dim{position:fixed;inset:0;pointer-events:none;z-index:1000}
 .overlay-warm{mix-blend-mode:multiply}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -170,6 +175,7 @@ input[type=range]{width:100%;accent-color:var(--accent);height:32px}
   if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 </script>
 <script src="services.js"></script>
+<script src="converter.js"></script>
 <script type="text/babel" data-presets="react" src="app.js"></script>
 <script>
   if ('serviceWorker' in navigator) {

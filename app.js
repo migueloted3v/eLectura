@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.1.0';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -232,6 +232,8 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction }) {
             <button type="button" className="btn" onClick={() => { onBookAction('finish', menuFor); setMenuFor(null); }}>
               {menuFor.finished ? 'Marcar como no terminado' : 'Marcar como terminado'}
             </button>
+            {menuFor.hasFile && menuFor.format === 'pdf' && <button type="button" className="btn primary" onClick={() => { onBookAction('convert', menuFor); setMenuFor(null); }}>Convertir a EPUB</button>}
+            {menuFor.hasFile && menuFor.format === 'epub' && <button type="button" className="btn" onClick={() => { onBookAction('download', menuFor); setMenuFor(null); }}>Descargar EPUB</button>}
             {menuFor.hasFile && <button type="button" className="btn" onClick={() => { onBookAction('free', menuFor); setMenuFor(null); }}>Quitar del cel (conserva el progreso)</button>}
             <button type="button" className="btn danger" onClick={() => { if (confirm('¿Eliminar "' + menuFor.title + '" y su progreso?')) { onBookAction('delete', menuFor); setMenuFor(null); } }}>Eliminar por completo</button>
           </div>
@@ -1009,6 +1011,111 @@ function Settings({ settings, onChange, profile, profiles, sources, go, onBack, 
   );
 }
 
+/* ================= Convertir Word o PDF a EPUB ================= */
+const sizeLabel = b => b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' KB' : Svc.mb(b);
+function ConvertSheet({ job, onSaveEpub, onKeepOriginal, onDeleteOriginal, onRead, onFinish, toast }) {
+  const [step, setStep] = useState(job.autoStart ? 'working' : 'ask');
+  const [note, setNote] = useState('Preparando…');
+  const [result, setResult] = useState(null);
+  const [saved, setSaved] = useState(null);
+  const [choice, setChoice] = useState(null);
+  const [error, setError] = useState(null);
+  const started = useRef(false);
+  const isPdf = job.kind === 'pdf';
+  const extWord = isPdf ? 'PDF' : 'Word';
+
+  const convert = () => {
+    if (started.current) return;
+    started.current = true;
+    setStep('working');
+    Conv.toEpub(job.blob, job.name, setNote)
+      .then(r => { setResult(r); return onSaveEpub(r); })
+      .then(meta => { if (!meta) throw new Error('No se pudo guardar el EPUB.'); setSaved(meta); setStep('done'); })
+      .catch(e => { setError(e); setStep('error'); });
+  };
+  useEffect(() => { if (job.autoStart) convert(); }, []);
+
+  // Si sale sin decidir, se conservan los dos (lo seguro).
+  const settle = () => {
+    if (isPdf && step === 'done' && !choice && job.source === 'import') onKeepOriginal(job);
+  };
+  const close = () => { if (step === 'working') return; settle(); onFinish(); };
+  const decide = c => {
+    setChoice(c);
+    if (c === 'delete' && job.source === 'library') onDeleteOriginal(job.book);
+    if (c === 'keep' && job.source === 'import') onKeepOriginal(job);
+  };
+  const download = () => Conv.saveToDevice(result.blob, result.title + '.epub')
+    .then(r => { if (r === 'downloaded') toast('EPUB descargado. Guárdalo en tu nube desde Archivos o Descargas.'); })
+    .catch(() => toast('No se pudo descargar el EPUB.'));
+
+  return (
+    <Sheet label="Convertir a EPUB" onClose={close}>
+      <div className="row-inline">
+        <span className="file-tag">{isPdf ? 'PDF' : 'DOCX'}</span>
+        <span className="stack-xs grow"><span className="serif strong big ellipsis">{job.title || job.name}</span>
+          <span className="muted small">{sizeLabel(job.blob.size)}</span></span>
+      </div>
+
+      {step === 'ask' && (
+        <div className="stack">
+          <div className="sheet-title">¿Convertir a EPUB?</div>
+          <p>Como EPUB tendrás tamaño de letra real, los tres temas completos y consulta de palabras.</p>
+          {isPdf && <div className="notice"><span>Conversión de PDF en prueba: funciona bien con novelas y texto corrido. Tablas, columnas y diseño se pierden, y un PDF escaneado no se puede convertir.</span></div>}
+          <button type="button" className="btn primary" onClick={convert}>Convertir a EPUB</button>
+          <button type="button" className="btn" onClick={() => { if (isPdf) onKeepOriginal(job); onFinish(); }}>{isPdf ? 'Abrir como PDF' : 'Ahora no'}</button>
+        </div>
+      )}
+
+      {step === 'working' && (
+        <div className="stack">
+          <div className="sheet-title">Convirtiendo…</div>
+          <span className="bar"><span className="bar-indeterminate" /></span>
+          <p className="muted small">{note}</p>
+          <p className="muted tiny">Todo ocurre en tu cel, sin internet. No cierres esta ventana.</p>
+        </div>
+      )}
+
+      {step === 'error' && (
+        <div className="stack">
+          <div className="sheet-title">No se pudo convertir</div>
+          <div className="notice"><span>{error && error.message ? error.message : 'Ocurrió un error al convertir.'}</span></div>
+          {isPdf && job.source === 'import' && <button type="button" className="btn primary" onClick={() => { onKeepOriginal(job); onFinish(); }}>Abrir como PDF</button>}
+          <button type="button" className="btn" onClick={onFinish}>Cerrar</button>
+        </div>
+      )}
+
+      {step === 'done' && result && (
+        <div className="stack">
+          <div className="sheet-title">Listo: ya es EPUB</div>
+          <div className="grid3 stats">
+            <span className="stat"><strong>{result.chapters}</strong><span className="muted tiny">capítulos</span></span>
+            <span className="stat"><strong>{result.images}</strong><span className="muted tiny">imágenes</span></span>
+            <span className="stat"><strong>{sizeLabel(result.blob.size)}</strong><span className="muted tiny">tamaño</span></span>
+          </div>
+          {isPdf && !choice && (
+            <div className="card pad stack">
+              <span className="strong">¿Borrar el {extWord} original?</span>
+              <span className="small">Puedes hojear el EPUB primero con Leer ahora; si sales sin decidir, se quedan los dos.</span>
+              <div className="row-gap">
+                <button type="button" className="btn grow dark" onClick={() => decide('delete')}>Sí, borrar</button>
+                <button type="button" className="btn grow" onClick={() => decide('keep')}>Conservar ambos</button>
+              </div>
+            </div>
+          )}
+          {isPdf && choice && <div className="notice"><span>{choice === 'delete' ? 'Listo, en tu biblioteca queda solo el EPUB.' : 'Conservé los dos. Puedes borrar cualquiera desde el menú del libro.'}</span></div>}
+          {!isPdf && <p className="muted small">El Word original sigue donde lo tenías, en tu cel o tu nube.</p>}
+          <div className="row-gap">
+            <button type="button" className="btn primary grow" onClick={() => { settle(); onFinish(); onRead(saved); }}>Leer ahora</button>
+            <button type="button" className="btn grow" onClick={download}>Descargar EPUB</button>
+          </div>
+          <p className="muted tiny center">Descárgalo para guardarlo en iCloud o Google Drive</p>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 /* ================= App ================= */
 function App() {
   const [ready, setReady] = useState(false);
@@ -1023,6 +1130,7 @@ function App() {
   const [now, setNow] = useState(new Date());
   const [toastMsg, setToastMsg] = useState(null);
   const [cloudPrompt, setCloudPrompt] = useState(null);
+  const [convertQueue, setConvertQueue] = useState([]);
   const fileRef = useRef(null);
   const toastTimer = useRef(null);
 
@@ -1094,8 +1202,18 @@ function App() {
 
   const onFiles = list => {
     const files = Array.from(list || []);
-    files.reduce((p, f) => p.then(() => saveBlob(f, f.name, { source: 'archivo' })), Promise.resolve());
+    const toConvert = [];
+    files.reduce((p, f) => p.then(() => {
+      const kind = Conv.kindOf(f.name, f.type);
+      if (kind === 'docx' || kind === 'pdf') { toConvert.push({ id: Svc.uid(), source: 'import', kind, blob: f, name: f.name }); return; }
+      if (kind === 'doc') { toast('Los .doc antiguos no se pueden abrir. Guárdalo como .docx en Word y vuelve a intentar.'); return; }
+      return saveBlob(f, f.name, { source: 'archivo' });
+    }), Promise.resolve()).then(() => { if (toConvert.length) setConvertQueue(q => [...q, ...toConvert]); });
   };
+  const nextConvert = () => setConvertQueue(q => q.slice(1));
+  const saveConverted = r => saveBlob(r.blob, r.title + '.epub', { title: r.title, author: r.author, lang: r.lang, source: 'conversión' });
+  const keepOriginal = job => { if (job.source === 'import') saveBlob(job.blob, job.name, { source: 'archivo' }); };
+  const deleteOriginal = book => Svc.deleteBook(book).then(refreshBooks);
 
   const saveRemote = r => Svc.downloadBlob(r.download)
     .then(blob => saveBlob(blob, r.title + '.' + r.format, { title: r.title, author: r.author, lang: r.lang, source: r.page }))
@@ -1122,6 +1240,12 @@ function App() {
     if (action === 'finish') Svc.updateBook({ ...b, finished: !b.finished }).then(done);
     if (action === 'free') Svc.freeBook(b).then(() => { toast('Quitado del cel. Bájalo de tu nube cuando quieras seguir.'); done(); });
     if (action === 'delete') Svc.deleteBook(b).then(() => { toast('Libro eliminado.'); done(); });
+    if (action === 'convert') Svc.getFile(b.id).then(blob => {
+      if (!blob) return toast('No encontré el archivo de este libro.');
+      setConvertQueue(q => [...q, { id: Svc.uid(), source: 'library', kind: 'pdf', blob, name: b.title + '.pdf', title: b.title, book: b, autoStart: true }]);
+    });
+    if (action === 'download') Svc.getFile(b.id).then(blob => blob && Conv.saveToDevice(blob, b.title + '.epub'))
+      .then(r => { if (r === 'downloaded') toast('EPUB descargado.'); }).catch(() => toast('No se pudo descargar el EPUB.'));
   };
 
   const saveWord = w => {
@@ -1175,6 +1299,11 @@ function App() {
           <p>Este libro está en tu nube. Bájalo de nuevo y retomas en la página donde ibas.</p>
           <button type="button" className="btn primary" onClick={() => { setCloudPrompt(null); go('discover', 'cloud'); }}>Ir a Mi nube</button>
         </Sheet>
+      )}
+      {convertQueue[0] && view.name !== 'reader' && (
+        <ConvertSheet key={convertQueue[0].id} job={convertQueue[0]} toast={toast}
+          onSaveEpub={saveConverted} onKeepOriginal={keepOriginal} onDeleteOriginal={deleteOriginal}
+          onRead={meta => meta && openBook(meta)} onFinish={nextConvert} />
       )}
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
       <div className="overlay-warm" style={{ background: 'rgba(255,146,54,' + (eff.warm / 100 * 0.24).toFixed(3) + ')' }} />

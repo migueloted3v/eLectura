@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -1399,6 +1399,7 @@ function Settings({ settings, onChange, profile, profiles, sources, go, onBack, 
               {syncInfo.devices.map((d, i) => <div key={i} className="row-between small"><span>{d.name}</span><span className="muted">{Math.floor(d.sec / 60)} min</span></div>)}
             </div>
           )}
+          {(syncInfo.status === 'needs-auth' || !settings.syncEnabled) && <p className="muted tiny">Dirección de regreso que debe estar registrada en Google Cloud: <code>{Svc.driveRedirectUri()}</code></p>}
           {settings.syncEnabled && <div className="row-between"><span className="stack-xs"><span>Reconectar solo al abrir</span><span className="muted small">Google pide permiso cada hora; la app lo renueva sola cuando abres</span></span><Toggle on={settings.syncAuto !== false} label="Reconectar solo al abrir" onChange={v => onChange({ ...settings, syncAuto: v })} /></div>}
           {settings.syncEnabled && <button type="button" className="btn sm" onClick={() => onChange({ ...settings, syncEnabled: false })}>Dejar de sincronizar en este aparato</button>}
         </div>

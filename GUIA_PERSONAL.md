@@ -105,6 +105,7 @@ Hazlas en al menos un iPhone y un Android.
 | 28 | Ajustes → Mis citas → tocar una cita | Abre el libro en esa página |
 | 29 | Tocar un pasaje marcado → Borrar | La marca desaparece y sale de Mis citas |
 | 30 | Marcar en modo Noche | El color se ve sin tapar el texto |
+| 31 | Avanzar varias páginas, cerrar la app desde el selector de apps y reabrir | Abre en la misma página y el encabezado dice la misma "Pág. X de Y" |
 
 Anota lo que falle con el número de prueba y el modelo de celular.
 

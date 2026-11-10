@@ -162,7 +162,9 @@ g.hl-ul line{stroke:inherit!important;stroke-width:3px!important;stroke-opacity:
 .reader-top{height:52px;display:flex;align-items:center;gap:8px;padding:0 8px;border-bottom:1px solid var(--line);transition:opacity .2s}
 .reader-foot{min-height:48px;display:flex;align-items:center;gap:8px;padding:0 8px var(--safe-bottom);transition:opacity .2s}
 .reader-top.hidden,.reader-foot.hidden{opacity:0;pointer-events:none}
-.reader-title{flex:1;text-align:center;font-size:13px;color:var(--muted)}
+.reader-title{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:13px;color:var(--muted);line-height:1.2}
+.reader-title .ellipsis{max-width:100%}
+.reader-page{font-size:12px;font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
 .aa-btn{width:44px;height:44px;border:none;border-radius:22px;background:var(--ui);font-family:var(--serif);font-size:17px}
 .reader-body{flex:1;position:relative;min-height:0}
 .epub-wrap{position:absolute;inset:0}
@@ -184,8 +186,8 @@ g.hl-ul line{stroke:inherit!important;stroke-width:3px!important;stroke-opacity:
 </head>
 <body>
 <div id="root"><div class="center-fill muted">Cargando…</div></div>
-<script>window.ELECTURA_SHELL = '1.2.2';</script>
-<script src="config.js?v=1.2.2"></script>
+<script>window.ELECTURA_SHELL = '1.2.3';</script>
+<script src="config.js?v=1.2.3"></script>
 <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.5/babel.min.js"></script>
@@ -195,9 +197,9 @@ g.hl-ul line{stroke:inherit!important;stroke-width:3px!important;stroke-opacity:
 <script>
   if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 </script>
-<script src="services.js?v=1.2.2"></script>
-<script src="converter.js?v=1.2.2"></script>
-<script type="text/babel" data-presets="react" src="app.js?v=1.2.2"></script>
+<script src="services.js?v=1.2.3"></script>
+<script src="converter.js?v=1.2.3"></script>
+<script type="text/babel" data-presets="react" src="app.js?v=1.2.3"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {

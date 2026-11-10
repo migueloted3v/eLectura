@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.2.2';
+const APP_VERSION = '1.2.3';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -21,6 +21,8 @@ const MODE_INFO = [
   { id: 'noche', label: 'Noche', short: 'Noche', detail: 'Noche cálida, muy cálida, atenuación media' }
 ];
 const PERIOD_LABEL = { dia: 'Día', tarde: 'Tarde', noche: 'Noche' };
+// Caracteres por página: cerca de una pantalla de cel con letra 19. La numeración es fija aunque cambies la letra.
+const LOC_SIZE = 900;
 const MAX_DIM = 0.55; // 100 % de atenuación = 55 % de oscurecimiento → brillo percibido mínimo 45 %
 const FONTS = {
   Literata: "'Literata', Georgia, serif",
@@ -543,7 +545,7 @@ function sanitizeChapter(html) {
   else out = out.replace(/<html\b[^>]*>/i, m => m + '<head>' + CHAPTER_CSP + '</head>');
   return out;
 }
-function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggleChrome, onSelect, onQuoteTap, quotes, startCfi, navRef, setLabel }) {
+function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggleChrome, onSelect, onQuoteTap, quotes, startCfi, navRef, setLabel, setPageInfo }) {
   const hostRef = useRef(null);
   const renditionRef = useRef(null);
   const bookRef = useRef(null);
@@ -552,6 +554,9 @@ function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggle
   const applied = useRef({});
   const contentsRef = useRef(null);
   const [ready, setReady] = useState(0);
+  const anchor = useRef(null);
+  const stable = useRef(false);
+  const showPageRef = useRef(() => {});
   const pal = PALETTE[eff.theme];
   const paginated = settings.flow === 'paginated';
 
@@ -575,13 +580,19 @@ function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggle
         link.rel = 'stylesheet';
         link.href = 'https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600&family=Atkinson+Hyperlegible:wght@400;700&display=swap';
         doc.head.appendChild(link);
+        // Cuando terminan de cargar las tipografías el texto se reacomoda; se vuelve a la página guardada.
+        if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(() => {
+          if (destroyed || !anchor.current) return;
+          const target = anchor.current; anchor.current = null;
+          rendition.display(target).then(() => { stable.current = true; }).catch(() => { stable.current = true; });
+        });
         let x0 = 0, y0 = 0, swiped = false;
         doc.addEventListener('touchstart', e => { x0 = e.changedTouches[0].screenX; y0 = e.changedTouches[0].screenY; swiped = false; }, { passive: true });
         doc.addEventListener('touchend', e => {
           const dx = e.changedTouches[0].screenX - x0, dy = e.changedTouches[0].screenY - y0;
           if (cb.current.settings.flow === 'paginated' && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
             swiped = true;
-            if (dx < 0) rendition.next(); else rendition.prev();
+            if (dx < 0) navRef.current.next(); else navRef.current.prev();
           }
         }, { passive: true });
         doc.addEventListener('click', () => {
@@ -589,7 +600,7 @@ function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggle
           if (swiped || (sel && sel.toString().trim())) return;
           cb.current.onToggleChrome();
         });
-        doc.addEventListener('keyup', e => { if (e.key === 'ArrowRight') rendition.next(); if (e.key === 'ArrowLeft') rendition.prev(); });
+        doc.addEventListener('keyup', e => { if (e.key === 'ArrowRight') navRef.current.next(); if (e.key === 'ArrowLeft') navRef.current.prev(); });
       });
       rendition.on('selected', (cfiRange, contents) => {
         const sel = contents.window.getSelection();
@@ -601,16 +612,26 @@ function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggle
         const sentence = word && sel.rangeCount ? sentenceAround(sel.getRangeAt(0), raw) : '';
         cb.current.onSelect({ cfi: cfiRange, text: raw.length > 1200 ? raw.slice(0, 1197) + '…' : raw, word, sentence });
       });
+      const showPage = cfi => {
+        const total = epub.locations.length();
+        if (!total) { setPageInfo(null); return null; }
+        const pct = epub.locations.percentageFromCfi(cfi);
+        setPageInfo({ page: Math.min(total, epub.locations.locationFromCfi(cfi) + 1), total });
+        return pct;
+      };
+      showPageRef.current = () => { const l = rendition.currentLocation(); if (l && l.start) showPage(l.start.cfi); };
       rendition.on('relocated', loc => {
         const cfi = loc.start.cfi;
-        const pct = epub.locations.length() ? epub.locations.percentageFromCfi(cfi) : null;
-        cb.current.onProgress({ cfi, percent: pct });
+        const pct = showPage(cfi);
+        // Mientras la página se acomoda al abrir, no se sobrescribe la posición guardada.
+        if (stable.current) cb.current.onProgress({ cfi, percent: pct });
         const chapter = loc.start.href ? (epub.navigation && epub.navigation.get(loc.start.href)) : null;
         setLabel([chapter && chapter.label ? chapter.label.trim() : null, pct != null ? Math.round(pct * 100) + ' %' : null].filter(Boolean).join(', '));
       });
+      const userMove = fn => () => { anchor.current = null; stable.current = true; return fn(); };
       navRef.current = {
-        next: () => rendition.next(), prev: () => rendition.prev(),
-        goto: cfi => rendition.display(cfi),
+        next: userMove(() => rendition.next()), prev: userMove(() => rendition.prev()),
+        goto: cfi => { anchor.current = null; stable.current = true; return rendition.display(cfi); },
         clearSelection: () => { try { const c = contentsRef.current; if (c) c.window.getSelection().removeAllRanges(); } catch (e) {} }
       };
       rendition.themes.default({
@@ -620,14 +641,24 @@ function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggle
         'img, svg': { 'max-width': '100% !important', 'height': 'auto !important' }
       });
       applyTheme(rendition);
-      return rendition.display(startCfi || (book.progress && book.progress.cfi) || undefined).then(() => {
-        if (!destroyed) { applied.current = {}; setReady(r => r + 1); }
-        if (book.locations) { epub.locations.load(book.locations); }
-        else {
+      const target = startCfi || (book.progress && book.progress.cfi) || undefined;
+      anchor.current = target || null;
+      stable.current = !target;
+      // Por si las tipografías no avisan (sin internet o ya cargadas): se da por estable en 3 s.
+      setTimeout(() => { if (!destroyed && !stable.current) { anchor.current = null; stable.current = true; } }, 3000);
+      const haveLocs = book.locations && book.locationsSize === LOC_SIZE;
+      if (haveLocs) { try { epub.locations.load(book.locations); } catch (e) {} }
+      return rendition.display(target).then(() => {
+        if (!destroyed) { applied.current = {}; setReady(r => r + 1); showPageRef.current(); }
+        if (!haveLocs) {
           setTimeout(() => {
             if (destroyed) return;
-            epub.locations.generate(1600).then(() => { if (!destroyed) onLocations(epub.locations.save()); }).catch(() => {});
-          }, 1500);
+            epub.locations.generate(LOC_SIZE).then(() => {
+              if (destroyed) return;
+              onLocations(epub.locations.save());
+              showPageRef.current();
+            }).catch(() => {});
+          }, 1200);
         }
       });
     }).catch(err => { console.error(err); setLabel('No se pudo abrir este EPUB'); });
@@ -677,8 +708,8 @@ function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggle
   return (
     <div className="epub-wrap" style={{ padding: paginated ? '8px ' + sp.margin + 'px' : '0' }}>
       <div ref={hostRef} className="epub-host" />
-      {paginated && <button type="button" className="edge edge-left" aria-label="Página anterior" style={{ width: sp.margin + 8 }} onClick={() => renditionRef.current && renditionRef.current.prev()} />}
-      {paginated && <button type="button" className="edge edge-right" aria-label="Página siguiente" style={{ width: sp.margin + 8 }} onClick={() => renditionRef.current && renditionRef.current.next()} />}
+      {paginated && <button type="button" className="edge edge-left" aria-label="Página anterior" style={{ width: sp.margin + 8 }} onClick={() => navRef.current.prev()} />}
+      {paginated && <button type="button" className="edge edge-right" aria-label="Página siguiente" style={{ width: sp.margin + 8 }} onClick={() => navRef.current.next()} />}
     </div>
   );
 }
@@ -723,7 +754,7 @@ function PdfPage({ pdf, num, scale, filter, onVisible }) {
     </div>
   );
 }
-function PdfView({ book, blob, settings, eff, onProgress, onToggleChrome, navRef, setLabel }) {
+function PdfView({ book, blob, settings, eff, onProgress, onToggleChrome, navRef, setLabel, setPageInfo }) {
   const [pdf, setPdf] = useState(null);
   const [page, setPage] = useState(book.progress?.page || 1);
   const scrollRef = useRef(null);
@@ -742,6 +773,7 @@ function PdfView({ book, blob, settings, eff, onProgress, onToggleChrome, navRef
     if (!pdf) return;
     onProgress({ page, percent: pdf.numPages > 1 ? (page - 1) / (pdf.numPages - 1) : 1 });
     setLabel('Página ' + page + ' de ' + pdf.numPages);
+    setPageInfo({ page, total: pdf.numPages });
   }, [page, pdf]);
 
   useEffect(() => {
@@ -781,6 +813,7 @@ function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveW
   const [chrome, setChrome] = useState(true);
   const [panel, setPanel] = useState(false);
   const [label, setLabel] = useState('');
+  const [pageInfo, setPageInfo] = useState(null);
   const [lookup, setLookup] = useState(null);
   const [sel, setSel] = useState(null);
   const [noteFor, setNoteFor] = useState(null);
@@ -815,8 +848,16 @@ function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveW
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => onBookUpdate(metaRef.current), 600);
   };
-  const onLocations = locs => { metaRef.current = { ...metaRef.current, locations: locs }; onBookUpdate(metaRef.current); };
+  const onLocations = locs => { metaRef.current = { ...metaRef.current, locations: locs, locationsSize: LOC_SIZE }; onBookUpdate(metaRef.current); };
   const exit = () => { clearTimeout(saveTimer.current); onExit(metaRef.current); };
+  // Si cierras o cambias de app, la página se guarda al instante (sin esperar).
+  useEffect(() => {
+    const flush = () => { clearTimeout(saveTimer.current); onBookUpdate(metaRef.current); };
+    const onVis = () => { if (document.visibilityState === 'hidden') flush(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', flush);
+    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', flush); };
+  }, []);
   const bookQuotes = useMemo(() => (quotes || []).filter(q => q.bookId === book.id), [quotes, book.id]);
   const selQuote = sel && sel.quoteId ? bookQuotes.find(q => q.id === sel.quoteId) : null;
   const onSelect = s => { setLookup(null); setSel({ ...s, quoteId: null }); };
@@ -842,14 +883,17 @@ function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveW
     <div className="reader">
       <header className={'reader-top' + (chrome ? '' : ' hidden')}>
         <button type="button" className="icon-btn" aria-label="Volver a la biblioteca" onClick={exit}><IBack /></button>
-        <div className="reader-title ellipsis">{book.title}</div>
+        <div className="reader-title">
+          <span className="ellipsis">{book.title}</span>
+          <span className="reader-page">{pageInfo ? 'Pág. ' + pageInfo.page.toLocaleString('es-MX') + ' de ' + pageInfo.total.toLocaleString('es-MX') : (isPdf ? '' : 'Contando páginas…')}</span>
+        </div>
         {!isPdf && <button type="button" className="icon-btn" aria-label="Citas de este libro" onClick={() => setListOpen(true)}><IBookmark /></button>}
         <button type="button" className="aa-btn" aria-label="Ajustes de lectura" onClick={() => setPanel(true)}>Aa</button>
       </header>
       <div className="reader-body">
         {blob ? <View book={metaRef.current} blob={blob} settings={settings} eff={eff} onProgress={onProgress} onLocations={onLocations}
           onToggleChrome={() => { if (sel) closeSel(); else setChrome(c => !c); }} onSelect={onSelect} onQuoteTap={onQuoteTap}
-          quotes={bookQuotes} startCfi={startCfi} navRef={navRef} setLabel={setLabel} />
+          quotes={bookQuotes} startCfi={startCfi} navRef={navRef} setLabel={setLabel} setPageInfo={setPageInfo} />
           : <div className="center-fill muted">Abriendo libro…</div>}
       </div>
       <footer className={'reader-foot' + (chrome ? '' : ' hidden')}>

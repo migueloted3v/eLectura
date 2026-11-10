@@ -12,6 +12,7 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 - Atenuación con piso mínimo: nunca baja de 45 % de brillo percibido, así el texto siempre se lee.
 - Calidez ajustable, de neutra a ámbar.
 - Tipografía (Literata, Atkinson de alta legibilidad o Georgia), tamaño de letra, interlineado y márgenes.
+- Arriba, junto al título, muestra en qué página vas y cuántas tiene el libro. En EPUB la numeración es fija aunque cambies el tamaño de letra; en PDF son las páginas reales.
 - Pasar página por páginas (tocar los bordes o deslizar) o en scroll continuo.
 - Mantiene la pantalla encendida mientras lees y ofrece un recordatorio de descanso cada 20 minutos.
 

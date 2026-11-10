@@ -134,6 +134,26 @@ input[type=range]{width:100%;accent-color:var(--accent);height:32px}
 .file-tag{width:44px;height:56px;flex-shrink:0;border-radius:6px;background:var(--ui);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--muted)}
 .stats{gap:8px}.stat{padding:10px;border-radius:10px;background:var(--bg);display:flex;flex-direction:column;gap:2px}.stat strong{font-size:18px}
 .btn.dark{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.selbar{position:fixed;left:10px;right:10px;bottom:calc(56px + var(--safe-bottom));z-index:40;background:#2B2620;color:#F4EEDF;border-radius:16px;padding:10px;display:flex;flex-direction:column;gap:8px;box-shadow:0 10px 26px rgba(0,0,0,.3);max-width:620px;margin:0 auto}
+.selbar .btn.ghost{background:transparent;color:#F4EEDF;border-color:#62574A}
+.selbar .btn.ghost:disabled{color:#8A7F6E;opacity:1}
+.selbar .ghost-icon{color:#F4EEDF}
+.selbar-note{margin:0;color:#A69780}
+.dark-seg{border-color:#62574A}.dark-seg button{color:#F4EEDF;font-weight:600}.dark-seg button.on{background:#F4EEDF;color:#2B2620}.dark-seg button.u{text-decoration:underline}
+.swatches{gap:5px}
+.dark-seg button{padding:0 10px}
+.swatch-dot{width:28px;height:28px;border-radius:14px;border:3px solid transparent;padding:0;flex-shrink:0}
+.swatch-dot.on{border-color:#F4EEDF}.swatch-dot.big{width:40px;height:40px;border-radius:20px}
+.selbar .swatch-dot{min-width:28px}.swatch-dot.on-dark{border-color:var(--fg)}
+.quote-box{padding:10px 12px;border-radius:10px;font-size:15px;line-height:1.5;max-height:9em;overflow:auto}
+.textarea{min-height:96px;padding:12px;resize:none;line-height:1.45}
+.quote-card{display:flex;align-items:flex-start;gap:4px;padding:4px 4px 4px 0}
+.quote-main{flex:1;min-width:0;background:transparent;border:none;text-align:left;padding:10px 4px 10px 14px;display:flex;flex-direction:column;gap:6px;color:var(--fg)}
+.quote-text{font-size:15px;line-height:1.55}
+.quote-note{line-height:1.4}
+.count-right{width:auto;padding-right:8px;white-space:nowrap}
+g.hl-ul rect{stroke:none!important}
+g.hl-ul line{stroke:inherit!important;stroke-width:3px!important;stroke-opacity:.95}
 .bar-indeterminate{width:40%!important;animation:slide 1.2s ease-in-out infinite}
 @keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
 

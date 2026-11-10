@@ -98,6 +98,13 @@ Hazlas en al menos un iPhone y un Android.
 | 21 | PDF escaneado → Convertir | Avisa que no se puede y ofrece abrirlo como PDF |
 | 22 | Descargar EPUB en iPhone | Abre el menú para Guardar en Archivos |
 | 23 | Consultar una palabra en un EPUB convertido | Funciona igual que en cualquier EPUB |
+| 24 | Seleccionar una frase → elegir un color | Queda sombreada y aparece "Cita guardada" |
+| 25 | Cambiar a Subrayar y a otro color | La marca cambia al instante |
+| 26 | + Nota → escribir → Guardar | La nota aparece en Mis citas |
+| 27 | Cerrar la app, reabrir el libro | Las marcas siguen pintadas |
+| 28 | Ajustes → Mis citas → tocar una cita | Abre el libro en esa página |
+| 29 | Tocar un pasaje marcado → Borrar | La marca desaparece y sale de Mis citas |
+| 30 | Marcar en modo Noche | El color se ve sin tapar el texto |
 
 Anota lo que falle con el número de prueba y el modelo de celular.
 

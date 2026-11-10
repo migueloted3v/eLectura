@@ -33,6 +33,14 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 - Guarda palabras en Mi vocabulario junto con la frase donde aparecieron.
 - Solo las consultas usan internet; la lectura no.
 
+**Citas y marcadores (libros EPUB)**
+- Selecciona cualquier texto y elige Sombrear o Subrayar en 5 colores (amarillo, verde, azul, rosa, naranja). La cita se guarda al elegir el color.
+- Agrega una nota personal opcional a cada cita.
+- Toca un pasaje marcado para cambiar su color o estilo, editar la nota o borrarlo.
+- Mis citas (Ajustes) reúne todas, agrupadas por libro y filtrables por color; al tocar una, el libro abre en esa página.
+- Dentro del libro, el ícono de marcador muestra las citas de ese libro.
+- Las citas se conservan aunque quites el libro del cel; se borran solo si eliminas el libro por completo.
+
 **Convertir Word o PDF a EPUB**
 - Al abrir un Word (.docx) o un PDF, la app ofrece convertirlo a EPUB; también desde el menú ⋯ de cualquier PDF de la biblioteca.
 - Word: conserva capítulos (según los títulos del documento), negritas, listas, tablas e imágenes.
@@ -68,6 +76,6 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 
 - Los .doc antiguos (Word 97-2003) no se convierten; hay que guardarlos como .docx.
 - Libros con DRM (Kindle, préstamos de Open Library) no se pueden abrir.
-- En PDF no hay consulta de palabras ni cambio real de tamaño de letra (solo zoom).
+- En PDF no hay consulta de palabras ni citas (convierte el PDF a EPUB para usarlas) ni cambio real de tamaño de letra (solo zoom).
 - Algunos sitios no permiten descargar desde otra página; en ese caso la app abre el sitio para bajar el archivo manualmente.
 - Los datos viven en cada dispositivo; no hay sincronización automática entre celulares.

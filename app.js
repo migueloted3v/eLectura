@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -36,7 +36,20 @@ const SPACING = {
 const DEFAULT_SETTINGS = {
   mode: 'auto', schedule: { dia: '07:00', tarde: '18:00', noche: '21:00' }, custom: null,
   fontSize: 19, font: 'Literata', spacing: 'normal', flow: 'paginated',
-  wakeLock: true, breakReminder: false, lookup: true, saveWords: true, freeFinished: true
+  wakeLock: true, breakReminder: false, lookup: true, saveWords: true, freeFinished: true, hlColor: 'amarillo', hlStyle: 'fill'
+};
+const HL_COLORS = [
+  { id: 'amarillo', name: 'Amarillo', solid: '#E8C24A' },
+  { id: 'verde', name: 'Verde', solid: '#6FB36A' },
+  { id: 'azul', name: 'Azul', solid: '#5C9AD6' },
+  { id: 'rosa', name: 'Rosa', solid: '#E07FA0' },
+  { id: 'naranja', name: 'Naranja', solid: '#E8924A' }
+];
+const hlColor = id => HL_COLORS.find(c => c.id === id) || HL_COLORS[0];
+const hlSoft = (id, theme) => {
+  const h = hlColor(id).solid;
+  const n = parseInt(h.slice(1), 16);
+  return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + (theme === 'noche' ? 0.42 : 0.5) + ')';
 };
 const PROFILE_COLORS = ['#9A5B2E', '#2F4A43', '#3B3552', '#5B6B3A', '#6E3B23', '#2F3E4A'];
 
@@ -72,6 +85,7 @@ const IClose = () => <Icon d="M6 6l12 12M18 6L6 18" size={18} sw={2} />;
 const ISearch = () => <Icon size={18} sw={2}><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></Icon>;
 const ISliders = () => <Icon><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12" /><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" /></Icon>;
 const IMore = () => <Icon size={20}><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></Icon>;
+const IBookmark = () => <Icon d="M6 3h12v18l-6-4-6 4z" />;
 const ICloud = () => <Icon><path d="M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z" /></Icon>;
 const IFile = () => <Icon size={22} sw={1.6}><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6" /></Icon>;
 const IWifiOff = () => <Icon><path d="M2 8.8a15 15 0 0 1 4.2-2.6M10 5.1A15 15 0 0 1 22 8.8M5 12.5a10 10 0 0 1 5-2.4M16.9 11.4a10 10 0 0 1 2.1 1.1M8.5 16a5 5 0 0 1 7 0M12 20h0M3 3l18 18" /></Icon>;
@@ -292,7 +306,7 @@ function ComfortPanel({ settings, eff, onChange, onClose, isPdf }) {
 }
 
 /* ================= Consulta de palabra ================= */
-function LookupSheet({ word, sentence, bookLang, bookTitle, canSave, onSave, onClose }) {
+function LookupSheet({ word, sentence, bookLang, bookTitle, canSave, onSave, onClose, initialTab }) {
   const [tab, setTab] = useState(null);
   const [meaning, setMeaning] = useState({ state: 'idle' });
   const [trans, setTrans] = useState({ state: 'idle' });
@@ -316,6 +330,7 @@ function LookupSheet({ word, sentence, bookLang, bookTitle, canSave, onSave, onC
   }, [word, trans, from, to]);
 
   const open = t => { setTab(t); if (t === 'meaning') loadMeaning(); else loadTrans(); };
+  useEffect(() => { if (initialTab) open(initialTab); }, []);
   const save = () => {
     Promise.all([loadMeaning(), loadTrans()]).then(([m, t]) => {
       const def = m && m.meanings[0] && m.meanings[0].defs[0] ? m.meanings[0].defs[0].text : '';
@@ -401,13 +416,127 @@ function sentenceAround(range, word) {
   } catch (e) { return ''; }
 }
 
+/* ================= Citas: barra de selección ================= */
+function SelectionBar({ sel, quote, settings, canLookup, onStyle, onColor, onNote, onLookup, onDelete, onClose }) {
+  const style = quote ? quote.style : settings.hlStyle;
+  const color = quote ? quote.color : settings.hlColor;
+  return (
+    <div className="selbar" role="toolbar" aria-label="Marcar cita">
+      <div className="row-between">
+        <div className="segmented dark-seg" role="group" aria-label="Estilo">
+          <button type="button" aria-pressed={style === 'fill'} className={style === 'fill' ? 'on' : ''} onClick={() => onStyle('fill')}>Sombrear</button>
+          <button type="button" aria-pressed={style === 'line'} className={(style === 'line' ? 'on ' : '') + 'u'} onClick={() => onStyle('line')}>Subrayar</button>
+        </div>
+        <div className="row-inline swatches">
+          {HL_COLORS.map(c => (
+            <button key={c.id} type="button" className={'swatch-dot' + (quote && color === c.id ? ' on' : '')} aria-label={c.name}
+              aria-pressed={!!quote && color === c.id} style={{ background: c.solid }} onClick={() => onColor(c.id)} />
+          ))}
+        </div>
+      </div>
+      <div className="row-gap">
+        <button type="button" className="btn sm grow ghost" onClick={onNote}>{quote && quote.note ? 'Editar nota' : '+ Nota'}</button>
+        {quote
+          ? <button type="button" className="btn sm grow ghost" onClick={onDelete}>Borrar</button>
+          : <>
+            <button type="button" className="btn sm grow ghost" disabled={!canLookup} onClick={() => onLookup('meaning')}>Significado</button>
+            <button type="button" className="btn sm grow ghost" disabled={!canLookup} onClick={() => onLookup('translation')}>Traducción</button>
+          </>}
+        <button type="button" className="icon-btn sm ghost-icon" aria-label="Cerrar" onClick={onClose}><IClose /></button>
+      </div>
+      <p className="tiny selbar-note">{quote ? 'Cita guardada. Cambia color o estilo cuando quieras.' : 'Elige un color para guardar la cita.' + (canLookup ? '' : ' Significado y Traducción: selecciona una sola palabra.')}</p>
+    </div>
+  );
+}
+
+function NoteSheet({ quote, theme, onSave, onClose }) {
+  const [text, setText] = useState(quote.note || '');
+  return (
+    <Sheet label="Nota de la cita" onClose={onClose}>
+      <div className="sheet-title">Nota para esta cita</div>
+      <p className="serif italic quote-box" style={{ background: hlSoft(quote.color, theme) }}>“{quote.text}”</p>
+      <label htmlFor="qnote" className="field-label">Tu nota (opcional)</label>
+      <textarea id="qnote" className="input textarea" rows={4} value={text} maxLength={1000}
+        placeholder="Por qué te gustó, qué te recuerda…" onChange={e => setText(e.target.value)} />
+      <button type="button" className="btn primary" onClick={() => onSave(text.trim())}>Guardar nota</button>
+    </Sheet>
+  );
+}
+
+function QuoteCard({ q, theme, onOpen, onDelete, showBook }) {
+  const mark = q.style === 'line'
+    ? { borderBottom: '3px solid ' + hlColor(q.color).solid }
+    : { background: hlSoft(q.color, theme), borderRadius: 3 };
+  return (
+    <div className="card quote-card">
+      <button type="button" className="quote-main" onClick={() => onOpen(q)}>
+        <span className="serif quote-text"><span style={mark}>{q.text}</span></span>
+        {q.note && <span className="small quote-note">{q.note}</span>}
+        <span className="muted tiny">{[showBook ? q.bookTitle : null, q.where].filter(Boolean).join(', ')}</span>
+      </button>
+      {onDelete && <button type="button" className="icon-btn sm" aria-label="Borrar cita" onClick={() => onDelete(q)}><IClose /></button>}
+    </div>
+  );
+}
+
+function BookQuotesSheet({ quotes, theme, onGo, onClose }) {
+  return (
+    <Sheet label="Citas de este libro" onClose={onClose}>
+      <div className="sheet-title">Citas de este libro</div>
+      {quotes.length === 0
+        ? <p className="muted">Aún no marcas citas. Mantén presionado el texto, ajusta la selección y elige un color.</p>
+        : <div className="stack-sm">{quotes.map(q => <QuoteCard key={q.id} q={q} theme={theme} onOpen={onGo} />)}</div>}
+    </Sheet>
+  );
+}
+
+function Quotes({ quotes, books, theme, onOpen, onDelete, onBack }) {
+  const [filter, setFilter] = useState('todos');
+  const shown = quotes.filter(q => filter === 'todos' || q.color === filter);
+  const groups = [];
+  shown.forEach(q => {
+    let g = groups.find(x => x.bookId === q.bookId);
+    if (!g) { g = { bookId: q.bookId, title: q.bookTitle, items: [] }; groups.push(g); }
+    g.items.push(q);
+  });
+  return (
+    <div className="screen">
+      <TopBar title="Mis citas" onBack={onBack} right={<span className="muted small count-right">{shown.length} {shown.length === 1 ? 'cita' : 'citas'}</span>} />
+      <div className="content">
+        <div className="row-inline" role="group" aria-label="Filtrar por color">
+          <button type="button" className={'chip' + (filter === 'todos' ? ' on' : '')} aria-pressed={filter === 'todos'} onClick={() => setFilter('todos')}>Todas</button>
+          {HL_COLORS.map(c => (
+            <button key={c.id} type="button" className={'swatch-dot big' + (filter === c.id ? ' on-dark' : '')} aria-label={c.name}
+              aria-pressed={filter === c.id} style={{ background: c.solid }} onClick={() => setFilter(c.id)} />
+          ))}
+        </div>
+        {quotes.length === 0 && <div className="empty"><p>Aún no guardas citas. En un libro EPUB, mantén presionado el texto, ajusta la selección y elige un color.</p></div>}
+        {quotes.length > 0 && shown.length === 0 && <p className="muted center">No hay citas de ese color.</p>}
+        {groups.map(g => {
+          const b = books.find(x => x.id === g.bookId);
+          return (
+            <div key={g.bookId} className="stack-sm">
+              <div className="row-between"><span className="serif strong big">{b ? b.title : g.title}</span><span className="muted tiny">{g.items.length} {g.items.length === 1 ? 'cita' : 'citas'}</span></div>
+              {g.items.map(q => <QuoteCard key={q.id} q={q} theme={theme} onOpen={onOpen} onDelete={onDelete} />)}
+            </div>
+          );
+        })}
+        {quotes.length > 0 && <p className="muted tiny center">Toca una cita para ir a esa página</p>}
+      </div>
+    </div>
+  );
+}
+
 /* ================= Vista EPUB ================= */
-function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggleChrome, onWord, navRef, setLabel }) {
+function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggleChrome, onSelect, onQuoteTap, quotes, startCfi, navRef, setLabel }) {
   const hostRef = useRef(null);
   const renditionRef = useRef(null);
   const bookRef = useRef(null);
   const cb = useRef({});
-  cb.current = { onProgress, onToggleChrome, onWord, settings };
+  cb.current = { onProgress, onToggleChrome, onSelect, onQuoteTap, settings, quotes };
+  const applied = useRef({});
+  const contentsRef = useRef(null);
+  const [ready, setReady] = useState(0);
   const pal = PALETTE[eff.theme];
   const paginated = settings.flow === 'paginated';
 
@@ -446,11 +575,13 @@ function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggle
       });
       rendition.on('selected', (cfiRange, contents) => {
         const sel = contents.window.getSelection();
-        const raw = sel ? sel.toString().trim() : '';
-        const word = raw.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '');
-        if (!word || /\s/.test(word) || word.length > 40) return;
-        const sentence = sel.rangeCount ? sentenceAround(sel.getRangeAt(0), raw) : '';
-        cb.current.onWord(word, sentence);
+        const raw = sel ? sel.toString().replace(/\s+/g, ' ').trim() : '';
+        if (!raw) return;
+        contentsRef.current = contents;
+        const clean = raw.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '');
+        const word = clean && !/\s/.test(clean) && clean.length <= 40 ? clean : null;
+        const sentence = word && sel.rangeCount ? sentenceAround(sel.getRangeAt(0), raw) : '';
+        cb.current.onSelect({ cfi: cfiRange, text: raw.length > 1200 ? raw.slice(0, 1197) + '…' : raw, word, sentence });
       });
       rendition.on('relocated', loc => {
         const cfi = loc.start.cfi;
@@ -459,7 +590,11 @@ function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggle
         const chapter = loc.start.href ? (epub.navigation && epub.navigation.get(loc.start.href)) : null;
         setLabel([chapter && chapter.label ? chapter.label.trim() : null, pct != null ? Math.round(pct * 100) + ' %' : null].filter(Boolean).join(', '));
       });
-      navRef.current = { next: () => rendition.next(), prev: () => rendition.prev() };
+      navRef.current = {
+        next: () => rendition.next(), prev: () => rendition.prev(),
+        goto: cfi => rendition.display(cfi),
+        clearSelection: () => { try { const c = contentsRef.current; if (c) c.window.getSelection().removeAllRanges(); } catch (e) {} }
+      };
       rendition.themes.default({
         'p, li, span, div, blockquote, dd, dt, td, h1, h2, h3, h4, h5, h6': { 'color': 'inherit !important', 'font-family': 'inherit !important', 'background': 'transparent !important' },
         'p, li, blockquote': { 'line-height': 'inherit !important' },
@@ -467,7 +602,8 @@ function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggle
         'img, svg': { 'max-width': '100% !important', 'height': 'auto !important' }
       });
       applyTheme(rendition);
-      return rendition.display(book.progress && book.progress.cfi ? book.progress.cfi : undefined).then(() => {
+      return rendition.display(startCfi || (book.progress && book.progress.cfi) || undefined).then(() => {
+        if (!destroyed) { applied.current = {}; setReady(r => r + 1); }
         if (book.locations) { epub.locations.load(book.locations); }
         else {
           setTimeout(() => {
@@ -491,6 +627,33 @@ function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggle
     r.themes.override('padding', '0 ' + (paginated ? 4 : sp.margin) + 'px', false);
   };
   useEffect(() => { applyTheme(renditionRef.current); }, [eff.theme, settings.font, settings.fontSize, settings.spacing]);
+
+  // Pinta las citas guardadas; las vuelve a pintar si cambian o cambia el tema.
+  useEffect(() => {
+    const r = renditionRef.current;
+    if (!r || !ready) return;
+    const want = {};
+    (quotes || []).forEach(q => { want[q.id] = q; });
+    Object.keys(applied.current).forEach(id => {
+      const a = applied.current[id], q = want[id];
+      if (!q || q.color !== a.color || q.style !== a.style || a.theme !== eff.theme) {
+        try { r.annotations.remove(a.cfi, a.style === 'line' ? 'underline' : 'highlight'); } catch (e) {}
+        delete applied.current[id];
+      }
+    });
+    Object.values(want).forEach(q => {
+      if (applied.current[q.id]) return;
+      const tap = () => cb.current.onQuoteTap(q.id);
+      try {
+        if (q.style === 'line') {
+          r.annotations.underline(q.cfi, { id: q.id }, tap, 'hl-ul', { stroke: hlColor(q.color).solid, 'stroke-opacity': '0.95', 'stroke-width': '3', 'mix-blend-mode': 'normal' });
+        } else {
+          r.annotations.highlight(q.cfi, { id: q.id }, tap, 'hl', { fill: hlSoft(q.color, eff.theme), 'fill-opacity': '1', 'mix-blend-mode': eff.theme === 'noche' ? 'normal' : 'multiply' });
+        }
+        applied.current[q.id] = { cfi: q.cfi, color: q.color, style: q.style, theme: eff.theme };
+      } catch (e) { console.warn('No se pudo pintar la cita', e); }
+    });
+  }, [quotes, ready, eff.theme]);
 
   const sp = SPACING[settings.spacing];
   return (
@@ -595,12 +758,15 @@ function PdfView({ book, blob, settings, eff, onProgress, onToggleChrome, navRef
 }
 
 /* ================= Lector ================= */
-function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveWord, toast }) {
+function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveWord, toast, quotes, onQuoteSave, onQuoteDelete, startCfi }) {
   const [blob, setBlob] = useState(null);
   const [chrome, setChrome] = useState(true);
   const [panel, setPanel] = useState(false);
   const [label, setLabel] = useState('');
   const [lookup, setLookup] = useState(null);
+  const [sel, setSel] = useState(null);
+  const [noteFor, setNoteFor] = useState(null);
+  const [listOpen, setListOpen] = useState(false);
   const navRef = useRef({ next: () => {}, prev: () => {} });
   const metaRef = useRef(book);
 
@@ -633,7 +799,24 @@ function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveW
   };
   const onLocations = locs => { metaRef.current = { ...metaRef.current, locations: locs }; onBookUpdate(metaRef.current); };
   const exit = () => { clearTimeout(saveTimer.current); onExit(metaRef.current); };
-  const onWord = (word, sentence) => { if (settings.lookup) setLookup({ word, sentence }); };
+  const bookQuotes = useMemo(() => (quotes || []).filter(q => q.bookId === book.id), [quotes, book.id]);
+  const selQuote = sel && sel.quoteId ? bookQuotes.find(q => q.id === sel.quoteId) : null;
+  const onSelect = s => { setLookup(null); setSel({ ...s, quoteId: null }); };
+  const onQuoteTap = id => { navRef.current.clearSelection && navRef.current.clearSelection(); setSel({ quoteId: id }); };
+  const closeSel = () => { navRef.current.clearSelection && navRef.current.clearSelection(); setSel(null); };
+  const ensureQuote = patch => {
+    if (selQuote) { const q = { ...selQuote, ...patch }; onQuoteSave(q); return q; }
+    const q = { id: Svc.uid(), bookId: book.id, bookTitle: book.title, cfi: sel.cfi, text: sel.text, note: '',
+      color: settings.hlColor, style: settings.hlStyle, where: label, date: new Date().toISOString(), ...patch };
+    onQuoteSave(q);
+    navRef.current.clearSelection && navRef.current.clearSelection();
+    setSel({ quoteId: q.id });
+    return q;
+  };
+  const pickColor = c => { onSettings({ ...settings, hlColor: c }); ensureQuote({ color: c }); };
+  const pickStyle = st => { onSettings({ ...settings, hlStyle: st }); if (selQuote) ensureQuote({ style: st }); };
+  const openNote = () => setNoteFor(ensureQuote({}).id);
+  const lookupFromSel = tab => { const s = sel; closeSel(); setLookup({ word: s.word, sentence: s.sentence, tab }); };
 
   const isPdf = book.format === 'pdf';
   const View = isPdf ? PdfView : EpubView;
@@ -642,11 +825,13 @@ function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveW
       <header className={'reader-top' + (chrome ? '' : ' hidden')}>
         <button type="button" className="icon-btn" aria-label="Volver a la biblioteca" onClick={exit}><IBack /></button>
         <div className="reader-title ellipsis">{book.title}</div>
+        {!isPdf && <button type="button" className="icon-btn" aria-label="Citas de este libro" onClick={() => setListOpen(true)}><IBookmark /></button>}
         <button type="button" className="aa-btn" aria-label="Ajustes de lectura" onClick={() => setPanel(true)}>Aa</button>
       </header>
       <div className="reader-body">
         {blob ? <View book={metaRef.current} blob={blob} settings={settings} eff={eff} onProgress={onProgress} onLocations={onLocations}
-          onToggleChrome={() => setChrome(c => !c)} onWord={onWord} navRef={navRef} setLabel={setLabel} />
+          onToggleChrome={() => { if (sel) closeSel(); else setChrome(c => !c); }} onSelect={onSelect} onQuoteTap={onQuoteTap}
+          quotes={bookQuotes} startCfi={startCfi} navRef={navRef} setLabel={setLabel} />
           : <div className="center-fill muted">Abriendo libro…</div>}
       </div>
       <footer className={'reader-foot' + (chrome ? '' : ' hidden')}>
@@ -655,7 +840,18 @@ function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveW
         {settings.flow === 'paginated' && <button type="button" className="icon-btn" aria-label="Página siguiente" onClick={() => navRef.current.next()}><INext /></button>}
       </footer>
       {panel && <ComfortPanel settings={settings} eff={eff} onChange={onSettings} onClose={() => setPanel(false)} isPdf={isPdf} />}
-      {lookup && <LookupSheet word={lookup.word} sentence={lookup.sentence} bookLang={book.lang} bookTitle={book.title}
+      {sel && (sel.quoteId ? selQuote : true) && !noteFor && (
+        <SelectionBar sel={sel} quote={selQuote} settings={settings} canLookup={!!(sel.word && settings.lookup)}
+          onStyle={pickStyle} onColor={pickColor} onNote={openNote} onLookup={lookupFromSel}
+          onDelete={() => { onQuoteDelete(selQuote); setSel(null); toast('Cita borrada.'); }} onClose={closeSel} />
+      )}
+      {noteFor && bookQuotes.find(q => q.id === noteFor) && (
+        <NoteSheet quote={bookQuotes.find(q => q.id === noteFor)} theme={eff.theme} onClose={() => setNoteFor(null)}
+          onSave={text => { onQuoteSave({ ...bookQuotes.find(q => q.id === noteFor), note: text }); setNoteFor(null); toast('Cita guardada en Mis citas.'); }} />
+      )}
+      {listOpen && <BookQuotesSheet quotes={bookQuotes} theme={eff.theme} onClose={() => setListOpen(false)}
+        onGo={q => { setListOpen(false); navRef.current.goto && navRef.current.goto(q.cfi); }} />}
+      {lookup && <LookupSheet word={lookup.word} sentence={lookup.sentence} bookLang={book.lang} bookTitle={book.title} initialTab={lookup.tab}
         canSave={settings.saveWords} onSave={onSaveWord} onClose={() => setLookup(null)} />}
     </div>
   );
@@ -895,7 +1091,7 @@ function Vocab({ words, onDelete, onBack }) {
 }
 
 /* ================= Ajustes ================= */
-function Settings({ settings, onChange, profile, profiles, sources, go, onBack, onExport, onImportBackup, onDeleteProfile, vocabCount, books }) {
+function Settings({ settings, onChange, profile, profiles, sources, go, onBack, onExport, onImportBackup, onDeleteProfile, vocabCount, quotesCount, books }) {
   const [storage, setStorage] = useState(null);
   const restoreRef = useRef(null);
   useEffect(() => { Svc.storageInfo().then(setStorage); }, [books.length]);
@@ -959,12 +1155,13 @@ function Settings({ settings, onChange, profile, profiles, sources, go, onBack, 
           <div className="row"><span className="stack-xs grow"><span>Recordatorio de descanso</span><span className="muted small">Cada 20 min: mira algo lejano 20 s</span></span><Toggle on={settings.breakReminder} label="Recordatorio de descanso" onChange={v => set({ breakReminder: v })} /></div>
         </div>
 
-        <h2 className="section">Diccionario y traducción</h2>
+        <h2 className="section">Diccionario, vocabulario y citas</h2>
         <div className="card list">
           <div className="row"><span className="stack-xs grow"><span>Consultar al seleccionar palabra</span><span className="muted small">Libros EPUB; mantén presionada la palabra</span></span><Toggle on={settings.lookup} label="Consultar al seleccionar palabra" onChange={v => set({ lookup: v })} /></div>
           <div className="row"><span className="grow">Traducir a</span><span className="muted small">Español (México)</span></div>
           <div className="row"><span className="stack-xs grow"><span>Guardar palabras consultadas</span><span className="muted small">Con la frase donde aparecieron</span></span><Toggle on={settings.saveWords} label="Guardar palabras consultadas" onChange={v => set({ saveWords: v })} /></div>
           <button type="button" className="row row-btn" onClick={() => go('vocab')}><span className="grow left">Mi vocabulario</span><span className="link">{vocabCount} {vocabCount === 1 ? 'palabra' : 'palabras'}</span></button>
+          <button type="button" className="row row-btn" onClick={() => go('quotes')}><span className="grow left">Mis citas</span><span className="link">{quotesCount} {quotesCount === 1 ? 'cita' : 'citas'}</span></button>
         </div>
 
         <h2 className="section">Fuentes de libros</h2>
@@ -1124,6 +1321,8 @@ function App() {
   const [settings, setSettingsState] = useState(DEFAULT_SETTINGS);
   const [books, setBooks] = useState([]);
   const [vocab, setVocab] = useState([]);
+  const [quotes, setQuotes] = useState([]);
+  const [startCfi, setStartCfi] = useState(null);
   const [customSources, setCustomSources] = useState([]);
   const [view, setView] = useState({ name: 'library' });
   const [readerBook, setReaderBook] = useState(null);
@@ -1164,6 +1363,7 @@ function App() {
     Svc.kv.set('currentProfile', pid);
     Svc.kv.get('settings:' + pid, null).then(s => setSettingsState({ ...DEFAULT_SETTINGS, ...(s || {}), schedule: { ...DEFAULT_SETTINGS.schedule, ...((s && s.schedule) || {}) } }));
     Svc.kv.get('vocab:' + pid, []).then(setVocab);
+    Svc.kv.get('quotes:' + pid, []).then(setQuotes);
     Svc.kv.get('sources:' + pid, []).then(setCustomSources);
     refreshBooks();
   }, [pid]);
@@ -1233,13 +1433,16 @@ function App() {
         return Svc.freeBook(meta).then(() => toast('Terminaste "' + meta.title + '". Quité el archivo del cel; tu progreso y vocabulario se quedan.'));
       }
     }).then(refreshBooks);
-    setReaderBook(null); go('library');
+    setReaderBook(null); setStartCfi(null); go('library');
   };
   const bookAction = (action, b) => {
     const done = () => refreshBooks();
     if (action === 'finish') Svc.updateBook({ ...b, finished: !b.finished }).then(done);
     if (action === 'free') Svc.freeBook(b).then(() => { toast('Quitado del cel. Bájalo de tu nube cuando quieras seguir.'); done(); });
-    if (action === 'delete') Svc.deleteBook(b).then(() => { toast('Libro eliminado.'); done(); });
+    if (action === 'delete') Svc.deleteBook(b).then(() => {
+      setQuotes(prev => { const next = prev.filter(q => q.bookId !== b.id); Svc.kv.set('quotes:' + pid, next); return next; });
+      toast('Libro eliminado.'); done();
+    });
     if (action === 'convert') Svc.getFile(b.id).then(blob => {
       if (!blob) return toast('No encontré el archivo de este libro.');
       setConvertQueue(q => [...q, { id: Svc.uid(), source: 'library', kind: 'pdf', blob, name: b.title + '.pdf', title: b.title, book: b, autoStart: true }]);
@@ -1251,6 +1454,17 @@ function App() {
   const saveWord = w => {
     const next = [w, ...vocab.filter(x => x.word.toLowerCase() !== w.word.toLowerCase())];
     setVocab(next); Svc.kv.set('vocab:' + pid, next);
+  };
+  const saveQuote = q => setQuotes(prev => {
+    const next = prev.some(x => x.id === q.id) ? prev.map(x => x.id === q.id ? q : x) : [q, ...prev];
+    Svc.kv.set('quotes:' + pid, next); return next;
+  });
+  const deleteQuote = q => setQuotes(prev => { const next = prev.filter(x => x.id !== q.id); Svc.kv.set('quotes:' + pid, next); return next; });
+  const openQuote = q => {
+    const b = books.find(x => x.id === q.bookId);
+    if (!b) return toast('Ese libro ya no está en tu biblioteca.');
+    if (!b.hasFile) { setCloudPrompt(b); return; }
+    setStartCfi(q.cfi); openBook(b);
   };
   const deleteWord = id => { const next = vocab.filter(w => w.id !== id); setVocab(next); Svc.kv.set('vocab:' + pid, next); };
   const addSource = s => { const next = [...customSources, s]; setCustomSources(next); Svc.kv.set('sources:' + pid, next); toast('Fuente agregada: ' + s.name); };
@@ -1276,13 +1490,16 @@ function App() {
     screen = <ProfilesScreen profiles={profiles} currentId={pid} onPick={id => { setPid(id); go('library'); }} onCreate={createProfile} onBack={() => go('library')} />;
   } else if (view.name === 'reader' && readerBook) {
     screen = <Reader book={readerBook} settings={settings} eff={eff} onSettings={setSettings} onExit={exitReader}
-      onBookUpdate={m => Svc.updateBook(m)} onSaveWord={saveWord} toast={toast} />;
+      onBookUpdate={m => Svc.updateBook(m)} onSaveWord={saveWord} toast={toast}
+      quotes={quotes} onQuoteSave={saveQuote} onQuoteDelete={deleteQuote} startCfi={startCfi} />;
   } else if (view.name === 'discover') {
     screen = <Discover sources={sources} books={books} initialTab={view.tab} initialCloud={view.cloud} onBack={() => go('library')} onSaveRemote={saveRemote} onSaveBlob={saveBlob}
       onImportClick={() => fileRef.current.click()} onAddSource={addSource} onRemoveSource={removeSource} />;
   } else if (view.name === 'settings') {
     screen = <Settings settings={settings} onChange={setSettings} profile={profile} profiles={profiles} sources={sources} go={go}
-      onBack={() => go('library')} onExport={exportBackup} onImportBackup={importBackup} onDeleteProfile={deleteProfile} vocabCount={vocab.length} books={books} />;
+      onBack={() => go('library')} onExport={exportBackup} onImportBackup={importBackup} onDeleteProfile={deleteProfile} vocabCount={vocab.length} quotesCount={quotes.length} books={books} />;
+  } else if (view.name === 'quotes') {
+    screen = <Quotes quotes={quotes} books={books} theme={eff.theme} onOpen={openQuote} onDelete={deleteQuote} onBack={() => go('settings')} />;
   } else if (view.name === 'vocab') {
     screen = <Vocab words={vocab} onDelete={deleteWord} onBack={() => go('settings')} />;
   } else {

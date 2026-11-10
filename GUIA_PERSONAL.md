@@ -11,6 +11,7 @@ index.html
 app.js
 services.js
 converter.js
+reading.js
 config.js
 sw.js
 manifest.webmanifest
@@ -106,6 +107,12 @@ Hazlas en al menos un iPhone y un Android.
 | 29 | Tocar un pasaje marcado → Borrar | La marca desaparece y sale de Mis citas |
 | 30 | Marcar en modo Noche | El color se ve sin tapar el texto |
 | 31 | Avanzar varias páginas, cerrar la app desde el selector de apps y reabrir | Abre en la misma página y el encabezado dice la misma "Pág. X de Y" |
+| 32 | Leer 10 min pasando páginas | Aparece "¡Meta de hoy cumplida!" y el chip de la biblioteca cambia |
+| 33 | Dejar el libro abierto 5 min sin tocar | Solo suman ~2 min |
+| 34 | Mi lectura → Semana, Mes, Año | Barras, minutos, páginas y proyección correctos |
+| 35 | Un día sin leer en la semana | La racha se conserva (usa el descanso) |
+| 36 | Dos días sin leer en la misma semana | La racha se reinicia |
+| 37 | Cada hija con su perfil en su cel, meta de 10 min | Cada una ve su propio avance |
 
 Anota lo que falle con el número de prueba y el modelo de celular.
 

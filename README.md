@@ -34,6 +34,14 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 - Guarda palabras en Mi vocabulario junto con la frase donde aparecieron.
 - Solo las consultas usan internet; la lectura no.
 
+**Medidor de lectura**
+- Cuenta solo la lectura activa: el tiempo corre con el libro en pantalla y se pausa si pasan 2 minutos sin cambiar de página o tocar la pantalla.
+- Meta diaria por perfil (5, 10, 15, 20 o 30 min) con anillo de avance y aviso al cumplirla. En la biblioteca, el chip "Hoy X de Y min" abre Mi lectura.
+- Racha de días con meta cumplida, con 1 día de descanso permitido por semana (lunes a domingo).
+- Vistas de semana, mes y año: minutos, páginas, metas cumplidas, libros terminados y mejor racha.
+- Proyección de libros al año según tu ritmo de los últimos 28 días.
+- Cada día guarda la meta vigente: cambiar la meta no altera días pasados ni la racha.
+
 **Citas y marcadores (libros EPUB)**
 - Selecciona cualquier texto y elige Sombrear o Subrayar en 5 colores (amarillo, verde, azul, rosa, naranja). La cita se guarda al elegir el color.
 - Agrega una nota personal opcional a cada cita.
@@ -69,6 +77,7 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 | `app.js` | Toda la interfaz |
 | `services.js` | Almacenamiento, lectura de archivos, búsquedas, diccionario y Google Drive |
 | `converter.js` | Conversión de Word y PDF a EPUB |
+| `reading.js` | Cálculos del medidor de lectura (racha, series, proyección) |
 | `config.js` | Configuración editable (Client ID de Google, carpeta de Drive) |
 | `sw.js` | Uso sin internet y actualizaciones |
 | `manifest.webmanifest`, `icons/` | Instalación en la pantalla de inicio |

@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.2.3';
+const APP_VERSION = '1.3.0';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -38,7 +38,7 @@ const SPACING = {
 const DEFAULT_SETTINGS = {
   mode: 'auto', schedule: { dia: '07:00', tarde: '18:00', noche: '21:00' }, custom: null,
   fontSize: 19, font: 'Literata', spacing: 'normal', flow: 'paginated',
-  wakeLock: true, breakReminder: false, lookup: true, saveWords: true, freeFinished: true, hlColor: 'amarillo', hlStyle: 'fill'
+  wakeLock: true, breakReminder: false, lookup: true, saveWords: true, freeFinished: true, hlColor: 'amarillo', hlStyle: 'fill', goalMin: 10
 };
 const HL_COLORS = [
   { id: 'amarillo', name: 'Amarillo', solid: '#E8C24A' },
@@ -173,8 +173,102 @@ function ProfilesScreen({ profiles, currentId, onPick, onCreate, onBack }) {
   );
 }
 
+/* ================= Medidor de lectura ================= */
+function Ring({ value, goal, size = 112, stroke = 12, children }) {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r, pct = Math.max(0, Math.min(1, goal ? value / goal : 0));
+  return (
+    <span className="ring" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={'0 0 ' + size + ' ' + size} aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--ui)" strokeWidth={stroke} />
+        {pct > 0 && <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--accent)" strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={(c * pct).toFixed(1) + ' ' + c.toFixed(1)} transform={'rotate(-90 ' + size / 2 + ' ' + size / 2 + ')'} />}
+      </svg>
+      {children && <span className="ring-center">{children}</span>}
+    </span>
+  );
+}
+const IFlame = () => <Icon size={16} sw={2}><path d="M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .3 2 1.5 3 2.5 3-1-3 0-6 0-8z" /></Icon>;
+const fmtMin = m => m >= 60 ? (m / 60).toFixed(m >= 600 ? 0 : 1).replace('.0', '') + ' h' : Math.round(m) + ' min';
+
+function Stats({ profile, log, books, goalMin, onGoal, onBack }) {
+  const [tab, setTab] = useState('semana');
+  const now = new Date();
+  const goalSec = goalMin * 60;
+  const todayMin = Reading.secOf(log, now) / 60;
+  const st = Reading.streak(log, goalSec, now);
+  const week = Reading.weekView(log, goalSec, now);
+  const ser = Reading.series(log, tab, now);
+  const tot = Reading.totals(log, ser.from, ser.to, goalSec, now);
+  const inRange = b => b.finished && b.finishedAt && b.finishedAt >= ser.from.getTime() && b.finishedAt <= Reading.addDays(ser.to, 1).getTime();
+  const finishedN = books.filter(inRange).length;
+  const sized = books.filter(b => b.totalPages && b.format === 'epub');
+  const avgPages = sized.length ? sized.reduce((a, b) => a + b.totalPages, 0) / sized.length : 400;
+  const proj = Reading.projection(log, now, avgPages);
+  const goalPer = tab === 'semana' ? goalMin : tab === 'mes' ? goalMin * 7 : goalMin * 30;
+  const maxV = Math.max(goalPer * 1.5, ...ser.bars.map(b => b.min), 1);
+  const H = 120;
+  const elapsed = tab === 'semana' ? week.filter(d => d.state !== 'future' && d.state !== 'none').length : null;
+  const title = tab === 'semana' ? 'Esta semana' : tab === 'mes' ? now.toLocaleDateString('es-MX', { month: 'long' }).replace(/^./, c => c.toUpperCase()) : String(now.getFullYear());
+  const kpis = tab === 'semana'
+    ? [[fmtMin(tot.sec / 60), 'leídos'], [tot.pages, 'páginas'], [tot.metDays + '/' + elapsed, 'metas']]
+    : tab === 'mes'
+      ? [[fmtMin(tot.sec / 60), 'leídos'], [tot.pages, 'páginas'], [finishedN, finishedN === 1 ? 'libro' : 'libros']]
+      : [[fmtMin(tot.sec / 60), 'leídos'], [finishedN, finishedN === 1 ? 'libro' : 'libros'], [Reading.bestStreak(log, goalSec, now) + ' días', 'mejor racha']];
+  const projText = proj
+    ? 'A este ritmo (' + proj.minPerDay.toFixed(proj.minPerDay < 10 ? 1 : 0) + ' min al día) terminarás ~' + Math.max(1, Math.round(proj.booksPerYear)) + (Math.round(proj.booksPerYear) === 1 ? ' libro' : ' libros') + ' al año.'
+    : 'Lee al menos 3 días para calcular cuántos libros terminarás al año.';
+  const mark = d => d.state === 'met' ? '✓' : d.state === 'today' ? Math.floor(d.sec / 60) : d.state === 'partial' ? '◐' : d.state === 'missed' ? 'D' : '';
+  return (
+    <div className="screen">
+      <TopBar title="Mi lectura" onBack={onBack} right={<span className="avatar sm-avatar" style={{ background: profile.color }}>{profile.name.slice(0, 1).toUpperCase()}</span>} />
+      <div className="content">
+        <div className="card pad today-card">
+          <Ring value={todayMin} goal={goalMin}><strong className="ring-num">{Math.floor(todayMin)}</strong><span className="muted tiny">de {goalMin} min</span></Ring>
+          <div className="stack-sm grow">
+            <span className="muted tiny upper">Hoy</span>
+            <span className="serif strong big">{todayMin >= goalMin ? '¡Meta cumplida!' : 'Te faltan ' + Math.ceil(goalMin - todayMin) + ' min para tu meta'}</span>
+            <span className="row-inline small streak"><IFlame /> {st.days} {st.days === 1 ? 'día seguido' : 'días seguidos'}</span>
+            <span className="muted tiny">{st.restAvailable ? '1 descanso disponible esta semana' : 'Ya usaste el descanso de esta semana'}</span>
+          </div>
+        </div>
+        <div className="week-row" aria-label="Esta semana">
+          {week.map(d => (
+            <span key={d.key} className="week-day">
+              <span className="muted tiny">{d.label}</span>
+              <span className={'week-dot ' + d.state + (d.isToday ? ' is-today' : '')} title={fmtMin(d.sec / 60)}>{mark(d)}</span>
+            </span>
+          ))}
+        </div>
+        <p className="muted tiny center legend">✓ Meta cumplida · ◐ Leyó menos · D Descanso</p>
+        <Segmented label="Periodo" value={tab} onChange={setTab} options={[{ id: 'semana', label: 'Semana' }, { id: 'mes', label: 'Mes' }, { id: 'anio', label: 'Año' }]} />
+        <div className="card pad stack">
+          <div className="row-between"><span className="serif strong big">{title}</span><span className="muted small">{fmtMin(tot.sec / 60)}</span></div>
+          <div className="chart" style={{ height: H + 20 }}>
+            <span className="goal-line" style={{ bottom: Math.min(H, goalPer / maxV * H) + 'px' }} />
+            {ser.bars.map((b, i) => (
+              <span key={i} className="bar-col">
+                <span className="tiny muted">{b.min >= 1 ? (tab === 'anio' ? fmtMin(b.min) : Math.round(b.min)) : ''}</span>
+                <span className="bar-v" style={{ height: Math.max(b.min > 0 ? 6 : 2, Math.round(b.min / maxV * H)) + 'px', background: b.min >= goalPer ? 'var(--accent)' : b.min > 0 ? 'var(--accent-soft)' : 'var(--ui)' }} />
+              </span>
+            ))}
+          </div>
+          <div className="chart-labels">{ser.bars.map((b, i) => <span key={i} className="tiny muted">{b.label}</span>)}</div>
+          <div className="grid3 stats">{kpis.map((k, i) => <span key={i} className="stat"><strong>{k[0]}</strong><span className="muted tiny">{k[1]}</span></span>)}</div>
+          <div className="projection"><Icon size={22}><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></Icon><span>{projText}</span></div>
+        </div>
+        <div className="card pad stack">
+          <span className="strong">Meta diaria</span>
+          <Segmented label="Meta diaria" value={String(goalMin)} onChange={v => onGoal(Number(v))}
+            options={[5, 10, 15, 20, 30].map(m => ({ id: String(m), label: m + ' min' }))} />
+          <p className="muted tiny">Solo cuenta mientras lees: el contador se pausa si pasan 2 minutos sin cambiar de página o tocar la pantalla.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ================= Biblioteca ================= */
-function Library({ profile, books, onOpen, onImportClick, go, onBookAction }) {
+function Library({ profile, books, onOpen, onImportClick, go, onBookAction, todaySec, goalMin }) {
   const [filter, setFilter] = useState('todos');
   const [menuFor, setMenuFor] = useState(null);
   const current = books.find(b => b.hasFile && b.openedAt && !b.finished);
@@ -185,6 +279,10 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction }) {
         <div>
           <div className="muted small">Biblioteca de</div>
           <h1 className="display">{profile.name}</h1>
+          <button type="button" className="today-chip" onClick={() => go('stats')} aria-label="Ver mi lectura">
+            <Ring value={todaySec / 60} goal={goalMin} size={22} stroke={4} />
+            <span>{todaySec / 60 >= goalMin ? 'Meta de hoy cumplida' : 'Hoy ' + Math.floor(todaySec / 60) + ' de ' + goalMin + ' min'}</span>
+          </button>
         </div>
         <div className="row-inline">
           <button type="button" className="avatar avatar-btn" style={{ background: profile.color }} aria-label="Cambiar de perfil" onClick={() => go('profiles')}>
@@ -808,12 +906,40 @@ function PdfView({ book, blob, settings, eff, onProgress, onToggleChrome, navRef
 }
 
 /* ================= Lector ================= */
-function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveWord, toast, quotes, onQuoteSave, onQuoteDelete, startCfi }) {
+function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveWord, toast, quotes, onQuoteSave, onQuoteDelete, startCfi, onReading }) {
   const [blob, setBlob] = useState(null);
   const [chrome, setChrome] = useState(true);
   const [panel, setPanel] = useState(false);
   const [label, setLabel] = useState('');
   const [pageInfo, setPageInfo] = useState(null);
+  // Medidor: cuenta solo lectura activa (pantalla visible y actividad en los últimos 2 min).
+  const lastAct = useRef(Date.now());
+  const pending = useRef({ sec: 0, pages: 0 });
+  const lastPage = useRef(null);
+  const touch = () => { lastAct.current = Date.now(); };
+  const flushReading = useCallback(() => {
+    const p = pending.current;
+    if (p.sec >= 1 || p.pages) { onReading(Math.round(p.sec), p.pages); pending.current = { sec: 0, pages: 0 }; }
+  }, [onReading]);
+  useEffect(() => {
+    let last = Date.now();
+    const tick = setInterval(() => {
+      const now = Date.now(), dt = Math.min(10, (now - last) / 1000); last = now;
+      if (document.visibilityState === 'visible' && now - lastAct.current <= 120000) pending.current.sec += dt;
+    }, 5000);
+    const save = setInterval(flushReading, 30000);
+    const onVis = () => { if (document.visibilityState === 'hidden') flushReading(); else { last = Date.now(); } };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', flushReading);
+    return () => { clearInterval(tick); clearInterval(save); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', flushReading); flushReading(); };
+  }, [flushReading]);
+  useEffect(() => {
+    if (!pageInfo) return;
+    const prev = lastPage.current;
+    lastPage.current = pageInfo.page;
+    if (prev != null && pageInfo.page > prev && pageInfo.page - prev <= 5) pending.current.pages += pageInfo.page - prev;
+    if (metaRef.current.totalPages !== pageInfo.total) metaRef.current = { ...metaRef.current, totalPages: pageInfo.total };
+  }, [pageInfo]);
   const [lookup, setLookup] = useState(null);
   const [sel, setSel] = useState(null);
   const [noteFor, setNoteFor] = useState(null);
@@ -843,8 +969,10 @@ function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveW
 
   const saveTimer = useRef(null);
   const onProgress = p => {
+    touch();
     const finished = metaRef.current.finished || (p.percent != null && p.percent >= 0.995);
-    metaRef.current = { ...metaRef.current, progress: { ...metaRef.current.progress, ...p }, openedAt: Date.now(), finished };
+    const finishedAt = finished && !metaRef.current.finished ? Date.now() : metaRef.current.finishedAt;
+    metaRef.current = { ...metaRef.current, progress: { ...metaRef.current.progress, ...p }, openedAt: Date.now(), finished, finishedAt };
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => onBookUpdate(metaRef.current), 600);
   };
@@ -860,7 +988,7 @@ function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveW
   }, []);
   const bookQuotes = useMemo(() => (quotes || []).filter(q => q.bookId === book.id), [quotes, book.id]);
   const selQuote = sel && sel.quoteId ? bookQuotes.find(q => q.id === sel.quoteId) : null;
-  const onSelect = s => { setLookup(null); setSel({ ...s, quoteId: null }); };
+  const onSelect = s => { touch(); setLookup(null); setSel({ ...s, quoteId: null }); };
   const onQuoteTap = id => { navRef.current.clearSelection && navRef.current.clearSelection(); setSel({ quoteId: id }); };
   const closeSel = () => { navRef.current.clearSelection && navRef.current.clearSelection(); setSel(null); };
   const ensureQuote = patch => {
@@ -892,7 +1020,7 @@ function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveW
       </header>
       <div className="reader-body">
         {blob ? <View book={metaRef.current} blob={blob} settings={settings} eff={eff} onProgress={onProgress} onLocations={onLocations}
-          onToggleChrome={() => { if (sel) closeSel(); else setChrome(c => !c); }} onSelect={onSelect} onQuoteTap={onQuoteTap}
+          onToggleChrome={() => { touch(); if (sel) closeSel(); else setChrome(c => !c); }} onSelect={onSelect} onQuoteTap={onQuoteTap}
           quotes={bookQuotes} startCfi={startCfi} navRef={navRef} setLabel={setLabel} setPageInfo={setPageInfo} />
           : <div className="center-fill muted">Abriendo libro…</div>}
       </div>
@@ -1385,6 +1513,7 @@ function App() {
   const [books, setBooks] = useState([]);
   const [vocab, setVocab] = useState([]);
   const [quotes, setQuotes] = useState([]);
+  const [readingLog, setReadingLog] = useState({});
   const [startCfi, setStartCfi] = useState(null);
   const [customSources, setCustomSources] = useState([]);
   const [view, setView] = useState({ name: 'library' });
@@ -1427,11 +1556,14 @@ function App() {
     Svc.kv.get('settings:' + pid, null).then(s => setSettingsState({ ...DEFAULT_SETTINGS, ...(s || {}), schedule: { ...DEFAULT_SETTINGS.schedule, ...((s && s.schedule) || {}) } }));
     Svc.kv.get('vocab:' + pid, []).then(setVocab);
     Svc.kv.get('quotes:' + pid, []).then(setQuotes);
+    Svc.kv.get('reading:' + pid, {}).then(setReadingLog);
     Svc.kv.get('sources:' + pid, []).then(setCustomSources);
     refreshBooks();
   }, [pid]);
 
   const setSettings = s => { setSettingsState(s); if (pid) Svc.kv.set('settings:' + pid, s); };
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   const eff = effectiveComfort(settings, now);
   const pal = PALETTE[eff.theme];
   const profile = profiles.find(p => p.id === pid);
@@ -1500,7 +1632,7 @@ function App() {
   };
   const bookAction = (action, b) => {
     const done = () => refreshBooks();
-    if (action === 'finish') Svc.updateBook({ ...b, finished: !b.finished }).then(done);
+    if (action === 'finish') Svc.updateBook({ ...b, finished: !b.finished, finishedAt: !b.finished ? Date.now() : null }).then(done);
     if (action === 'free') Svc.freeBook(b).then(() => { toast('Quitado del cel. Bájalo de tu nube cuando quieras seguir.'); done(); });
     if (action === 'delete') Svc.deleteBook(b).then(() => {
       setQuotes(prev => { const next = prev.filter(q => q.bookId !== b.id); Svc.kv.set('quotes:' + pid, next); return next; });
@@ -1529,6 +1661,20 @@ function App() {
     if (!b.hasFile) { setCloudPrompt(b); return; }
     setStartCfi(q.cfi); openBook(b);
   };
+  const addReading = useCallback((sec, pages) => {
+    if (!pid) return;
+    setReadingLog(prev => {
+      const now = new Date();
+      const goalSec = (settingsRef.current.goalMin || 10) * 60;
+      const next = Reading.add(prev, now, sec, pages, goalSec);
+      if (Reading.secOf(prev, now) < goalSec && Reading.secOf(next, now) >= goalSec) {
+        const st = Reading.streak(next, goalSec, now);
+        setTimeout(() => toast('¡Meta de hoy cumplida! Llevas ' + st.days + (st.days === 1 ? ' día' : ' días') + ' de racha.'), 0);
+      }
+      Svc.kv.set('reading:' + pid, next);
+      return next;
+    });
+  }, [pid]);
   const deleteWord = id => { const next = vocab.filter(w => w.id !== id); setVocab(next); Svc.kv.set('vocab:' + pid, next); };
   const addSource = s => { const next = [...customSources, s]; setCustomSources(next); Svc.kv.set('sources:' + pid, next); toast('Fuente agregada: ' + s.name); };
   const removeSource = id => { const next = customSources.filter(s => s.id !== id); setCustomSources(next); Svc.kv.set('sources:' + pid, next); };
@@ -1554,19 +1700,22 @@ function App() {
   } else if (view.name === 'reader' && readerBook) {
     screen = <Reader book={readerBook} settings={settings} eff={eff} onSettings={setSettings} onExit={exitReader}
       onBookUpdate={m => Svc.updateBook(m)} onSaveWord={saveWord} toast={toast}
-      quotes={quotes} onQuoteSave={saveQuote} onQuoteDelete={deleteQuote} startCfi={startCfi} />;
+      quotes={quotes} onQuoteSave={saveQuote} onQuoteDelete={deleteQuote} startCfi={startCfi} onReading={addReading} />;
   } else if (view.name === 'discover') {
     screen = <Discover sources={sources} books={books} initialTab={view.tab} initialCloud={view.cloud} onBack={() => go('library')} onSaveRemote={saveRemote} onSaveBlob={saveBlob}
       onImportClick={() => fileRef.current.click()} onAddSource={addSource} onRemoveSource={removeSource} />;
   } else if (view.name === 'settings') {
     screen = <Settings settings={settings} onChange={setSettings} profile={profile} profiles={profiles} sources={sources} go={go}
       onBack={() => go('library')} onExport={exportBackup} onImportBackup={importBackup} onDeleteProfile={deleteProfile} vocabCount={vocab.length} quotesCount={quotes.length} books={books} />;
+  } else if (view.name === 'stats') {
+    screen = <Stats profile={profile} log={readingLog} books={books} goalMin={settings.goalMin || 10} onGoal={m => { setSettings({ ...settings, goalMin: m }); setReadingLog(prev => { const next = Reading.setGoal(prev, new Date(), m * 60); Svc.kv.set('reading:' + pid, next); return next; }); }} onBack={() => go('library')} />;
   } else if (view.name === 'quotes') {
     screen = <Quotes quotes={quotes} books={books} theme={eff.theme} onOpen={openQuote} onDelete={deleteQuote} onBack={() => go('settings')} />;
   } else if (view.name === 'vocab') {
     screen = <Vocab words={vocab} onDelete={deleteWord} onBack={() => go('settings')} />;
   } else {
-    screen = <Library profile={profile} books={books} onOpen={openBook} onImportClick={() => fileRef.current.click()} go={go} onBookAction={bookAction} />;
+    screen = <Library profile={profile} books={books} onOpen={openBook} onImportClick={() => fileRef.current.click()} go={go} onBookAction={bookAction}
+      todaySec={Reading.secOf(readingLog, new Date())} goalMin={settings.goalMin || 10} />;
   }
 
   return (

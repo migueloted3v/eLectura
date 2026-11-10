@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.2.2';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -528,6 +528,21 @@ function Quotes({ quotes, books, theme, onOpen, onDelete, onBack }) {
 }
 
 /* ================= Vista EPUB ================= */
+// Quita scripts, eventos en línea y objetos incrustados del capítulo, y agrega una política que
+// impide ejecutar cualquier script del libro. Así el lector puede activar los toques en iPhone sin riesgo.
+const CHAPTER_CSP = '<meta http-equiv="Content-Security-Policy" content="script-src \'none\'; object-src \'none\'; frame-src \'none\'; base-uri \'none\'; form-action \'none\'"/>';
+function sanitizeChapter(html) {
+  let out = String(html || '')
+    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/<script\b[^>]*\/>/gi, '')
+    .replace(/<(iframe|object|embed|frame|frameset|applet)\b[\s\S]*?(<\/\1\s*>|\/>)/gi, '')
+    .replace(/<(iframe|object|embed|frame|frameset|applet|meta\s+http-equiv\s*=\s*["']?refresh)\b[^>]*>/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/(href|src|xlink:href|action|formaction)\s*=\s*(["'])\s*(javascript|vbscript):[^"']*\2/gi, '$1="#"');
+  if (/<head\b[^>]*>/i.test(out)) out = out.replace(/<head\b[^>]*>/i, m => m + CHAPTER_CSP);
+  else out = out.replace(/<html\b[^>]*>/i, m => m + '<head>' + CHAPTER_CSP + '</head>');
+  return out;
+}
 function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggleChrome, onSelect, onQuoteTap, quotes, startCfi, navRef, setLabel }) {
   const hostRef = useRef(null);
   const renditionRef = useRef(null);
@@ -546,8 +561,11 @@ function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggle
     bookRef.current = epub;
     blob.arrayBuffer().then(buf => epub.open(buf)).then(() => {
       if (destroyed) return;
+      // iPhone/iPad: WebKit no entrega toques ni selección a un iframe sin "allow-scripts".
+      // Se permite, pero cada capítulo se limpia antes de mostrarse y se bloquea todo script del libro.
+      epub.spine.hooks.serialize.register((output, section) => { section.output = sanitizeChapter(output); });
       const rendition = epub.renderTo(hostRef.current, {
-        width: '100%', height: '100%', spread: 'none', allowScriptedContent: false,
+        width: '100%', height: '100%', spread: 'none', allowScriptedContent: true,
         flow: paginated ? 'paginated' : 'scrolled-doc', manager: paginated ? 'default' : 'continuous'
       });
       renditionRef.current = rendition;

@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -1203,6 +1203,7 @@ function Settings({ settings, onChange, profile, profiles, sources, go, onBack, 
           {profiles.length > 1 && <button type="button" className="btn danger" onClick={() => { if (confirm('¿Eliminar el perfil de ' + profile.name + ' con sus libros y progreso en este dispositivo?')) onDeleteProfile(profile.id); }}>Eliminar el perfil de {profile.name}</button>}
         </div>
         <p className="muted tiny center">eLectura {APP_VERSION}</p>
+        <button type="button" className="btn" onClick={() => { try { sessionStorage.removeItem('electura-update'); } catch (e) {} forceUpdate(); }}>Buscar actualización</button>
       </div>
     </div>
   );
@@ -1529,4 +1530,14 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+// Si el cel quedó con una mezcla de versiones (pantalla vieja con código nuevo), limpia y recarga una vez.
+function forceUpdate() {
+  try { sessionStorage.setItem('electura-update', APP_VERSION); } catch (e) {}
+  const clear = window.caches ? caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))) : Promise.resolve();
+  const regs = navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.map(r => r.update().catch(() => {})))) : Promise.resolve();
+  Promise.all([clear, regs]).catch(() => {}).then(() => location.reload());
+}
+let alreadyTried = null;
+try { alreadyTried = sessionStorage.getItem('electura-update'); } catch (e) {}
+if (window.ELECTURA_SHELL !== APP_VERSION && alreadyTried !== APP_VERSION) forceUpdate();
+else ReactDOM.createRoot(document.getElementById('root')).render(<App />);

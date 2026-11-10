@@ -129,4 +129,5 @@ Ajustes → Almacenamiento → **Respaldar progreso** genera un `.json`. Guárda
 - **Google Drive dice que no encuentra la carpeta**: el nombre debe ser exactamente `Libros` (o cámbialo en `config.js` → `DRIVE_FOLDER`).
 - **Google dice `redirect_uri_mismatch`**: la dirección de regreso registrada no coincide. Copia la que muestra la app bajo el botón Conectar y pégala tal cual en *URIs de redireccionamiento autorizados* (con `/` al final y las mismas mayúsculas). Los cambios en Google tardan unos minutos.
 - **Google dice `access_denied` o "Acceso bloqueado"**: agrega ese Gmail en *Usuarios de prueba*.
+- **La app se ve distinta a lo esperado o le faltan botones** (por ejemplo, la barra de citas sin diseño): el cel quedó con una mezcla de versiones. Desde la 1.2.1 la app lo detecta y se recarga sola; si no, ve a Ajustes → **Buscar actualización** (al final).
 - **La app no abre sin internet**: ábrela una vez con buena señal después de cada actualización; así guarda todo en el cel. Desde la versión 1.0.2 abre al instante aunque no haya señal.

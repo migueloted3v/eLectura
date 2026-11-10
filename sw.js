@@ -1,7 +1,7 @@
 /* eLectura · service worker.
    La app abre al instante desde lo guardado en el cel (con o sin internet)
    y se actualiza en segundo plano. Al publicar cambios, sube VERSION. */
-const VERSION = 'electura-v1.2.0';
+const VERSION = 'electura-v1.2.1';
 const SHELL = ['./', 'index.html', 'app.js', 'services.js', 'converter.js', 'config.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 const LIBS = [
@@ -35,17 +35,28 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // Archivos propios: responde con lo guardado y actualiza en segundo plano.
+  // Archivos propios: primero internet (máx. 3.5 s) para que las actualizaciones lleguen completas;
+  // sin señal o con señal lenta, responde con lo guardado en el cel.
   if (url.origin === self.location.origin) {
     const isPage = req.mode === 'navigate';
+    const key = isPage ? 'index.html' : url.origin + url.pathname; // sin ?v= para no duplicar versiones
     e.respondWith(caches.open(VERSION).then(async c => {
-      const hit = await c.match(isPage ? 'index.html' : req, { ignoreSearch: true });
-      const net = fetch(req).then(res => {
-        if (res.ok && !isPage) c.put(req, res.clone());
+      const cached = () => c.match(isPage ? 'index.html' : req, { ignoreSearch: true });
+      const net = fetch(req, { cache: 'no-cache' }).then(res => {
+        if (res.ok) c.put(isPage ? 'index.html' : key, res.clone());
         return res;
-      }).catch(() => null);
-      if (hit) { e.waitUntil(net); return hit; }
-      return (await net) || new Response('Sin conexión', { status: 503 });
+      });
+      const slow = new Promise(resolve => setTimeout(resolve, 3500, null));
+      try {
+        const first = await Promise.race([net, slow]);
+        if (first) return first;
+        const hit = await cached();
+        if (hit) { e.waitUntil(net.catch(() => {})); return hit; }
+        return await net;
+      } catch (err) {
+        const hit = await cached();
+        return hit || new Response('Sin conexión', { status: 503 });
+      }
     }));
     return;
   }

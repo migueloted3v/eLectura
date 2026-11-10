@@ -42,6 +42,13 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 - Proyección de libros al año según tu ritmo de los últimos 28 días.
 - Cada día guarda la meta vigente: cambiar la meta no altera días pasados ni la racha.
 
+**Sincronizar entre aparatos**
+- Con la misma cuenta de Google, suma los minutos leídos en cel y tablet, y mantiene igual la página donde vas, citas, vocabulario, meta y ajustes.
+- Usa la carpeta oculta de la app en tu Google Drive (permiso `drive.appdata`): no ve ni toca tus otros archivos. Los libros no se suben.
+- Cada aparato escribe su propia parte, así que leer en dos aparatos sin internet no duplica ni pierde minutos. Los ajustes, citas y páginas se mezclan por fecha de cambio.
+- Se activa por perfil en Ajustes; los perfiles que no la activan nunca se conectan a Google.
+- Sincroniza al abrir, cada 5 minutos, al volver a la app y al salir de un libro. Google pide permiso cada hora; la app lo renueva sola al abrir.
+
 **Citas y marcadores (libros EPUB)**
 - Selecciona cualquier texto y elige Sombrear o Subrayar en 5 colores (amarillo, verde, azul, rosa, naranja). La cita se guarda al elegir el color.
 - Agrega una nota personal opcional a cada cita.
@@ -78,6 +85,7 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 | `services.js` | Almacenamiento, lectura de archivos, búsquedas, diccionario y Google Drive |
 | `converter.js` | Conversión de Word y PDF a EPUB |
 | `reading.js` | Cálculos del medidor de lectura (racha, series, proyección) |
+| `sync.js` | Mezcla de datos entre aparatos para la sincronización |
 | `config.js` | Configuración editable (Client ID de Google, carpeta de Drive) |
 | `sw.js` | Uso sin internet y actualizaciones |
 | `manifest.webmanifest`, `icons/` | Instalación en la pantalla de inicio |
@@ -88,4 +96,4 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 - Libros con DRM (Kindle, préstamos de Open Library) no se pueden abrir.
 - En PDF no hay consulta de palabras ni citas (convierte el PDF a EPUB para usarlas) ni cambio real de tamaño de letra (solo zoom).
 - Algunos sitios no permiten descargar desde otra página; en ese caso la app abre el sitio para bajar el archivo manualmente.
-- Los datos viven en cada dispositivo; no hay sincronización automática entre celulares.
+- La sincronización funciona entre aparatos de la misma cuenta de Google; no permite ver el avance de otras personas.

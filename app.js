@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -986,14 +986,14 @@ function Reader({ book, settings, eff, onSettings, onExit, onBookUpdate, onSaveW
     window.addEventListener('pagehide', flush);
     return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', flush); };
   }, []);
-  const bookQuotes = useMemo(() => (quotes || []).filter(q => q.bookId === book.id), [quotes, book.id]);
+  const bookQuotes = useMemo(() => (quotes || []).filter(q => q.bookId === book.id || (q.bookKey && q.bookKey === book.fingerprint)), [quotes, book.id]);
   const selQuote = sel && sel.quoteId ? bookQuotes.find(q => q.id === sel.quoteId) : null;
   const onSelect = s => { touch(); setLookup(null); setSel({ ...s, quoteId: null }); };
   const onQuoteTap = id => { navRef.current.clearSelection && navRef.current.clearSelection(); setSel({ quoteId: id }); };
   const closeSel = () => { navRef.current.clearSelection && navRef.current.clearSelection(); setSel(null); };
   const ensureQuote = patch => {
     if (selQuote) { const q = { ...selQuote, ...patch }; onQuoteSave(q); return q; }
-    const q = { id: Svc.uid(), bookId: book.id, bookTitle: book.title, cfi: sel.cfi, text: sel.text, note: '',
+    const q = { id: Svc.uid(), bookId: book.id, bookKey: book.fingerprint, bookTitle: book.title, cfi: sel.cfi, text: sel.text, note: '',
       color: settings.hlColor, style: settings.hlStyle, where: label, date: new Date().toISOString(), ...patch };
     onQuoteSave(q);
     navRef.current.clearSelection && navRef.current.clearSelection();
@@ -1221,7 +1221,7 @@ function AddSource({ onAdd }) {
 function Discover({ sources, books, onBack, onSaveRemote, onSaveBlob, onImportClick, onAddSource, onRemoveSource, initialTab, initialCloud }) {
   const [tab, setTab] = useState(initialTab || sources[0].id);
   const src = sources.find(s => s.id === tab);
-  const tabs = [...sources.map(s => ({ id: s.id, label: s.name })), { id: 'cloud', label: 'Mi nube' }, { id: 'add', label: '+ Agregar fuente' }];
+  const tabs = [{ id: 'cloud', label: 'Mi nube' }, ...sources.map(s => ({ id: s.id, label: s.name })), { id: 'add', label: '+ Agregar fuente' }];
   return (
     <div className="screen">
       <TopBar title="Buscar libros" onBack={onBack} />
@@ -1281,7 +1281,7 @@ function Vocab({ words, onDelete, onBack }) {
 }
 
 /* ================= Ajustes ================= */
-function Settings({ settings, onChange, profile, profiles, sources, go, onBack, onExport, onImportBackup, onDeleteProfile, vocabCount, quotesCount, books }) {
+function Settings({ settings, onChange, profile, profiles, sources, go, onBack, onExport, onImportBackup, onDeleteProfile, vocabCount, quotesCount, books, syncInfo, onSync }) {
   const [storage, setStorage] = useState(null);
   const restoreRef = useRef(null);
   useEffect(() => { Svc.storageInfo().then(setStorage); }, [books.length]);
@@ -1381,6 +1381,26 @@ function Settings({ settings, onChange, profile, profiles, sources, go, onBack, 
             <button type="button" className="btn grow" onClick={() => restoreRef.current.click()}>Restaurar respaldo</button>
             <input ref={restoreRef} type="file" hidden accept="application/json,.json" onChange={e => { const f = e.target.files[0]; e.target.value = ''; if (f) onImportBackup(f); }} />
           </div>
+        </div>
+
+        <h2 className="section">Sincronizar entre aparatos</h2>
+        <div className="card pad stack">
+          <p className="small">Suma tus minutos y mantiene igual tu página, citas, vocabulario, meta y ajustes en todos tus aparatos con la misma cuenta de Google. Los libros no se suben.</p>
+          <div className="row-between">
+            <span className="stack-xs">
+              <span className="strong">{!settings.syncEnabled ? 'Desactivado en este aparato' : syncInfo.status === 'syncing' ? 'Sincronizando…' : syncInfo.status === 'needs-auth' ? 'Conecta Google para sincronizar' : syncInfo.status === 'error' ? 'No se pudo sincronizar' : syncInfo.at ? 'Sincronizado' : 'Aún sin sincronizar'}</span>
+              <span className="muted tiny">{syncInfo.at ? 'Última vez: ' + new Date(syncInfo.at).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Usa el mismo nombre de perfil en cada aparato'}</span>
+            </span>
+            <button type="button" className="btn primary sm" disabled={syncInfo.status === 'syncing'} onClick={onSync}>{!settings.syncEnabled ? 'Activar' : syncInfo.status === 'needs-auth' ? 'Conectar' : 'Sincronizar ahora'}</button>
+          </div>
+          {syncInfo.devices && syncInfo.devices.length > 0 && (
+            <div className="stack-xs">
+              <span className="muted tiny">Lectura de hoy por aparato</span>
+              {syncInfo.devices.map((d, i) => <div key={i} className="row-between small"><span>{d.name}</span><span className="muted">{Math.floor(d.sec / 60)} min</span></div>)}
+            </div>
+          )}
+          {settings.syncEnabled && <div className="row-between"><span className="stack-xs"><span>Reconectar solo al abrir</span><span className="muted small">Google pide permiso cada hora; la app lo renueva sola cuando abres</span></span><Toggle on={settings.syncAuto !== false} label="Reconectar solo al abrir" onChange={v => onChange({ ...settings, syncAuto: v })} /></div>}
+          {settings.syncEnabled && <button type="button" className="btn sm" onClick={() => onChange({ ...settings, syncEnabled: false })}>Dejar de sincronizar en este aparato</button>}
         </div>
 
         <h2 className="section">Perfiles</h2>
@@ -1514,6 +1534,11 @@ function App() {
   const [vocab, setVocab] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [readingLog, setReadingLog] = useState({});
+  const pendingSync = useRef(null);
+  const [othersLog, setOthersLog] = useState({});
+  const [syncInfo, setSyncInfo] = useState({ at: 0, devices: [], status: '' });
+  const mergedLog = useMemo(() => Sync.sumLogs([readingLog, ...Object.values(othersLog).map(d => d.reading || {})]), [readingLog, othersLog]);
+  const tombs = useRef({ quotes: {}, vocab: {} });
   const [startCfi, setStartCfi] = useState(null);
   const [customSources, setCustomSources] = useState([]);
   const [view, setView] = useState({ name: 'library' });
@@ -1539,10 +1564,20 @@ function App() {
       const id = ps.find(p => p.id === cur) ? cur : (ps[0] && ps[0].id);
       if (id) setPid(id); else setView({ name: 'profiles' });
       if (id && back) {
-        setView({ name: 'discover', tab: 'cloud', cloud: 'gdrive' });
-        if (back.error) toast(back.error === 'access_denied'
-          ? 'Google no dio acceso. Revisa que tu correo esté en Usuarios de prueba.'
-          : 'Google respondió: ' + back.error);
+        if (back.purpose === 'syncsilent') {
+          // Renovación automática al abrir: sin cambiar de pantalla ni mostrar errores.
+          if (back.ok) pendingSync.current = 'auto';
+        } else if (back.purpose === 'sync') {
+          // Reconexión silenciosa fallida: no molestar; la conexión manual se ofrece en Ajustes.
+          if (back.ok) pendingSync.current = 'manual';
+          else if (!/interaction_required|login_required|consent_required/.test(back.error || '')) toast('Google respondió: ' + back.error);
+          if (back.ok || !/required/.test(back.error || '')) setView({ name: 'settings' });
+        } else {
+          setView({ name: 'discover', tab: 'cloud', cloud: 'gdrive' });
+          if (back.error) toast(back.error === 'access_denied'
+            ? 'Google no dio acceso. Revisa que tu correo esté en Usuarios de prueba.'
+            : 'Google respondió: ' + back.error);
+        }
       }
       setReady(true);
     }).catch(err => { console.error(err); setReady(true); });
@@ -1557,13 +1592,23 @@ function App() {
     Svc.kv.get('vocab:' + pid, []).then(setVocab);
     Svc.kv.get('quotes:' + pid, []).then(setQuotes);
     Svc.kv.get('reading:' + pid, {}).then(setReadingLog);
+    Svc.kv.get('reading-others:' + pid, {}).then(setOthersLog);
+    Svc.kv.get('sync-meta:' + pid, { at: 0, devices: [] }).then(m => setSyncInfo({ ...m, status: '' }));
+    Svc.kv.get('tombs:' + pid, { quotes: {}, vocab: {} }).then(t => { tombs.current = t; });
     Svc.kv.get('sources:' + pid, []).then(setCustomSources);
     refreshBooks();
   }, [pid]);
 
-  const setSettings = s => { setSettingsState(s); if (pid) Svc.kv.set('settings:' + pid, s); };
+  const setSettings = s => {
+    const prev = settingsRef.current || {}, now = Date.now(), ts = { ...(prev._ts || {}) };
+    Object.keys(s).forEach(k => { if (k !== '_ts' && JSON.stringify(s[k]) !== JSON.stringify(prev[k])) ts[k] = now; });
+    const v = { ...s, _ts: ts };
+    settingsRef.current = v; setSettingsState(v); if (pid) Svc.kv.set('settings:' + pid, v);
+  };
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  const othersRef = useRef(othersLog);
+  othersRef.current = othersLog;
   const eff = effectiveComfort(settings, now);
   const pal = PALETTE[eff.theme];
   const profile = profiles.find(p => p.id === pid);
@@ -1623,6 +1668,7 @@ function App() {
     Svc.updateBook(meta); setReaderBook(meta); go('reader');
   };
   const exitReader = meta => {
+    setTimeout(() => runSync('auto'), 1500);
     Svc.updateBook(meta).then(() => {
       if (meta.finished && settings.freeFinished && meta.hasFile) {
         return Svc.freeBook(meta).then(() => toast('Terminaste "' + meta.title + '". Quité el archivo del cel; tu progreso y vocabulario se quedan.'));
@@ -1635,7 +1681,7 @@ function App() {
     if (action === 'finish') Svc.updateBook({ ...b, finished: !b.finished, finishedAt: !b.finished ? Date.now() : null }).then(done);
     if (action === 'free') Svc.freeBook(b).then(() => { toast('Quitado del cel. Bájalo de tu nube cuando quieras seguir.'); done(); });
     if (action === 'delete') Svc.deleteBook(b).then(() => {
-      setQuotes(prev => { const next = prev.filter(q => q.bookId !== b.id); Svc.kv.set('quotes:' + pid, next); return next; });
+      setQuotes(prev => { prev.filter(q => q.bookId === b.id).forEach(q => tomb('quotes', q.id)); const next = prev.filter(q => q.bookId !== b.id); Svc.kv.set('quotes:' + pid, next); return next; });
       toast('Libro eliminado.'); done();
     });
     if (action === 'convert') Svc.getFile(b.id).then(blob => {
@@ -1646,18 +1692,22 @@ function App() {
       .then(r => { if (r === 'downloaded') toast('EPUB descargado.'); }).catch(() => toast('No se pudo descargar el EPUB.'));
   };
 
+  const tomb = (kind, id) => { tombs.current = { ...tombs.current, [kind]: { ...tombs.current[kind], [id]: Date.now() } }; Svc.kv.set('tombs:' + pid, tombs.current); };
   const saveWord = w => {
-    const next = [w, ...vocab.filter(x => x.word.toLowerCase() !== w.word.toLowerCase())];
+    const word = { ...w, updatedAt: Date.now() };
+    vocab.filter(x => x.word.toLowerCase() === w.word.toLowerCase() && x.id !== w.id).forEach(x => tomb('vocab', x.id));
+    const next = [word, ...vocab.filter(x => x.word.toLowerCase() !== w.word.toLowerCase())];
     setVocab(next); Svc.kv.set('vocab:' + pid, next);
   };
-  const saveQuote = q => setQuotes(prev => {
+  const saveQuote = q0 => setQuotes(prev => {
+    const q = { ...q0, updatedAt: Date.now() };
     const next = prev.some(x => x.id === q.id) ? prev.map(x => x.id === q.id ? q : x) : [q, ...prev];
     Svc.kv.set('quotes:' + pid, next); return next;
   });
-  const deleteQuote = q => setQuotes(prev => { const next = prev.filter(x => x.id !== q.id); Svc.kv.set('quotes:' + pid, next); return next; });
+  const deleteQuote = q => { tomb('quotes', q.id); setQuotes(prev => { const next = prev.filter(x => x.id !== q.id); Svc.kv.set('quotes:' + pid, next); return next; }); };
   const openQuote = q => {
-    const b = books.find(x => x.id === q.bookId);
-    if (!b) return toast('Ese libro ya no está en tu biblioteca.');
+    const b = books.find(x => x.id === q.bookId) || books.find(x => q.bookKey && x.fingerprint === q.bookKey);
+    if (!b) return toast('Ese libro no está en este aparato. Bájalo de tu nube y vuelve a tocar la cita.');
     if (!b.hasFile) { setCloudPrompt(b); return; }
     setStartCfi(q.cfi); openBook(b);
   };
@@ -1667,15 +1717,94 @@ function App() {
       const now = new Date();
       const goalSec = (settingsRef.current.goalMin || 10) * 60;
       const next = Reading.add(prev, now, sec, pages, goalSec);
-      if (Reading.secOf(prev, now) < goalSec && Reading.secOf(next, now) >= goalSec) {
-        const st = Reading.streak(next, goalSec, now);
+      const others = Object.values(othersRef.current).map(d => d.reading || {});
+      const before = Sync.sumLogs([prev, ...others]), after = Sync.sumLogs([next, ...others]);
+      if (Reading.secOf(before, now) < goalSec && Reading.secOf(after, now) >= goalSec) {
+        const st = Reading.streak(after, goalSec, now);
         setTimeout(() => toast('¡Meta de hoy cumplida! Llevas ' + st.days + (st.days === 1 ? ' día' : ' días') + ' de racha.'), 0);
       }
       Svc.kv.set('reading:' + pid, next);
       return next;
     });
   }, [pid]);
-  const deleteWord = id => { const next = vocab.filter(w => w.id !== id); setVocab(next); Svc.kv.set('vocab:' + pid, next); };
+  const deleteWord = id => { tomb('vocab', id); const next = vocab.filter(w => w.id !== id); setVocab(next); Svc.kv.set('vocab:' + pid, next); };
+  /* ---------- Sincronizar entre aparatos (Google Drive, carpeta oculta de la app) ---------- */
+  const syncBusy = useRef(false);
+  const latest = useRef({});
+  latest.current = { readingLog, settings, quotes, vocab, books, profile, readerBook };
+  const runSync = useCallback(reason => {
+    const L = latest.current;
+    if (!pid || !L.profile || syncBusy.current) return Promise.resolve();
+    if (!Svc.driveConfigured()) { if (reason === 'manual') toast('Falta configurar Google en config.js.'); return Promise.resolve(); }
+    // Solo sincroniza si la activaste tú (en Ajustes); así los perfiles que no la usan nunca van a Google.
+    if (reason !== 'manual' && !L.settings.syncEnabled) return Promise.resolve();
+    if (!Svc.driveCanSync()) {
+      if (reason === 'manual') return Svc.driveConnect('sync');
+      if (reason === 'open' && L.settings.syncAuto !== false) {
+        let tried = null; try { tried = sessionStorage.getItem('electura-silent'); } catch (e) {}
+        if (!tried) { try { sessionStorage.setItem('electura-silent', '1'); } catch (e) {} return Svc.driveConnect('syncsilent', true); }
+      }
+      setSyncInfo(i => ({ ...i, status: 'needs-auth' }));
+      return Promise.resolve();
+    }
+    syncBusy.current = true;
+    setSyncInfo(i => ({ ...i, status: 'syncing' }));
+    const progress = {};
+    L.books.forEach(b => {
+      if (b.fingerprint && b.progress && (b.progress.cfi || b.progress.page)) {
+        progress[b.fingerprint] = { cfi: b.progress.cfi || null, percent: b.progress.percent ?? null, page: b.progress.page || null, title: b.title, at: b.openedAt || 0 };
+      }
+    });
+    const { _ts, _at, ...settingsValue } = L.settings;
+    const local = {
+      deviceId: Sync.deviceId(), deviceName: Sync.deviceName(), profile: L.profile.name,
+      reading: L.readingLog, settings: { value: settingsValue, ts: _ts || {} },
+      quotes: L.quotes, quotesDeleted: tombs.current.quotes, vocab: L.vocab, vocabDeleted: tombs.current.vocab, progress
+    };
+    return Svc.syncLoad(L.profile.name).then(({ id, doc }) => {
+      const m = Sync.merge(local, doc);
+      return Svc.syncSave(id, L.profile.name, m.doc).then(() => m.apply);
+    }).then(a => {
+      setOthersLog(a.others); Svc.kv.set('reading-others:' + pid, a.others);
+      if (a.settings) {
+        const cur = latest.current.settings;
+        const v = { ...cur, ...a.settings.value, syncEnabled: true, syncAuto: cur.syncAuto, _ts: { ...(cur._ts || {}), ...a.settings.ts } };
+        settingsRef.current = v; setSettingsState(v); Svc.kv.set('settings:' + pid, v);
+      }
+      else if (!L.settings.syncEnabled) { const v = { ...L.settings, syncEnabled: true }; setSettingsState(v); Svc.kv.set('settings:' + pid, v); }
+      const byKey = {}; L.books.forEach(b => { if (b.fingerprint) byKey[b.fingerprint] = b.id; });
+      const qs = a.quotes.map(q => (q.bookKey && byKey[q.bookKey] ? { ...q, bookId: byKey[q.bookKey] } : q));
+      setQuotes(qs); Svc.kv.set('quotes:' + pid, qs);
+      setVocab(a.vocab); Svc.kv.set('vocab:' + pid, a.vocab);
+      tombs.current = { quotes: a.quotesDeleted, vocab: a.vocabDeleted }; Svc.kv.set('tombs:' + pid, tombs.current);
+      const openId = L.readerBook && L.readerBook.id;
+      const updates = L.books.filter(b => b.fingerprint && a.progress[b.fingerprint] && b.id !== openId && (a.progress[b.fingerprint].at || 0) > (b.openedAt || 0))
+        .map(b => {
+          const p = a.progress[b.fingerprint];
+          return Svc.updateBook({ ...b, openedAt: p.at, progress: { ...b.progress, cfi: p.cfi || (b.progress && b.progress.cfi), percent: p.percent, page: p.page || (b.progress && b.progress.page) } });
+        });
+      const today = Reading.dayKey(new Date());
+      const devices = [{ name: Sync.deviceName() + ' (este)', sec: (L.readingLog[today] || {}).sec || 0 }]
+        .concat(Object.values(a.others).map(d => ({ name: d.name, sec: ((d.reading || {})[today] || {}).sec || 0, at: d.at })));
+      const info = { at: Date.now(), devices };
+      setSyncInfo({ ...info, status: 'ok' }); Svc.kv.set('sync-meta:' + pid, info);
+      return Promise.all(updates).then(() => { if (updates.length) refreshBooks(); if (reason === 'manual') toast('Sincronizado con tus otros aparatos.'); });
+    }).catch(e => {
+      setSyncInfo(i => ({ ...i, status: e.code === 'auth' || e.code === 'scope' ? 'needs-auth' : 'error' }));
+      if (reason === 'manual') toast(e.message || 'No se pudo sincronizar.');
+    }).finally(() => { syncBusy.current = false; });
+  }, [pid]);
+  // Al abrir, cada 5 minutos con la app a la vista y al volver a ella.
+  useEffect(() => {
+    if (!pid || !profile) return;
+    const t0 = setTimeout(() => runSync(pendingSync.current || 'open'), 1500);
+    pendingSync.current = null;
+    const iv = setInterval(() => { if (document.visibilityState === 'visible') runSync('auto'); }, 5 * 60 * 1000);
+    const onVis = () => { if (document.visibilityState === 'visible') runSync('auto'); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearTimeout(t0); clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
+  }, [pid, !!profile]);
+
   const addSource = s => { const next = [...customSources, s]; setCustomSources(next); Svc.kv.set('sources:' + pid, next); toast('Fuente agregada: ' + s.name); };
   const removeSource = id => { const next = customSources.filter(s => s.id !== id); setCustomSources(next); Svc.kv.set('sources:' + pid, next); };
 
@@ -1706,16 +1835,17 @@ function App() {
       onImportClick={() => fileRef.current.click()} onAddSource={addSource} onRemoveSource={removeSource} />;
   } else if (view.name === 'settings') {
     screen = <Settings settings={settings} onChange={setSettings} profile={profile} profiles={profiles} sources={sources} go={go}
-      onBack={() => go('library')} onExport={exportBackup} onImportBackup={importBackup} onDeleteProfile={deleteProfile} vocabCount={vocab.length} quotesCount={quotes.length} books={books} />;
+      onBack={() => go('library')} onExport={exportBackup} onImportBackup={importBackup} onDeleteProfile={deleteProfile} vocabCount={vocab.length} quotesCount={quotes.length} books={books}
+      syncInfo={syncInfo} onSync={() => runSync('manual')} />;
   } else if (view.name === 'stats') {
-    screen = <Stats profile={profile} log={readingLog} books={books} goalMin={settings.goalMin || 10} onGoal={m => { setSettings({ ...settings, goalMin: m }); setReadingLog(prev => { const next = Reading.setGoal(prev, new Date(), m * 60); Svc.kv.set('reading:' + pid, next); return next; }); }} onBack={() => go('library')} />;
+    screen = <Stats profile={profile} log={mergedLog} books={books} goalMin={settings.goalMin || 10} onGoal={m => { setSettings({ ...settings, goalMin: m }); setReadingLog(prev => { const next = Reading.setGoal(prev, new Date(), m * 60); Svc.kv.set('reading:' + pid, next); return next; }); }} onBack={() => go('library')} />;
   } else if (view.name === 'quotes') {
     screen = <Quotes quotes={quotes} books={books} theme={eff.theme} onOpen={openQuote} onDelete={deleteQuote} onBack={() => go('settings')} />;
   } else if (view.name === 'vocab') {
     screen = <Vocab words={vocab} onDelete={deleteWord} onBack={() => go('settings')} />;
   } else {
     screen = <Library profile={profile} books={books} onOpen={openBook} onImportClick={() => fileRef.current.click()} go={go} onBookAction={bookAction}
-      todaySec={Reading.secOf(readingLog, new Date())} goalMin={settings.goalMin || 10} />;
+      todaySec={Reading.secOf(mergedLog, new Date())} goalMin={settings.goalMin || 10} />;
   }
 
   return (

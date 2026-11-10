@@ -12,6 +12,7 @@ app.js
 services.js
 converter.js
 reading.js
+sync.js
 config.js
 sw.js
 manifest.webmanifest
@@ -70,6 +71,15 @@ Al tocar **Conectar Google Drive**, la app se va a la página de Google y regres
 
 > **Ojo con las comillas:** en `config.js` cada valor de texto va entre comillas dobles, por ejemplo `DRIVE_FOLDER: "eBooks",`. Sin comillas el archivo no se puede leer.
 
+## 5b. Sincronizar tu cel y tu tablet
+
+1. En **cada aparato**, crea tu perfil con **el mismo nombre** (por ejemplo, Miguel).
+2. Ajustes → **Sincronizar entre aparatos** → **Activar**. Google pedirá permiso (incluye "ver y administrar sus propios datos de configuración en tu Google Drive": es la carpeta oculta de la app).
+3. Listo: al abrir la app, cada 5 minutos y al salir de un libro, se suman los minutos y se igualan página, citas, vocabulario, meta y ajustes.
+4. Opcional, en Google Cloud → *Google Auth Platform* → *Acceso a datos*: agrega el permiso `.../auth/drive.appdata` junto a `drive.readonly`. En modo prueba funciona aunque no lo agregues.
+
+Tus hijas no necesitan activarlo: si no lo activan, su app nunca se conecta a Google.
+
 ## 6. Pruebas de la v1
 
 Hazlas en al menos un iPhone y un Android.
@@ -113,6 +123,13 @@ Hazlas en al menos un iPhone y un Android.
 | 35 | Un día sin leer en la semana | La racha se conserva (usa el descanso) |
 | 36 | Dos días sin leer en la misma semana | La racha se reinicia |
 | 37 | Cada hija con su perfil en su cel, meta de 10 min | Cada una ve su propio avance |
+| 38 | Cel y tablet con el mismo perfil → Activar en ambos | En Ajustes aparecen los dos aparatos con sus minutos de hoy |
+| 39 | Leer 5 min en el cel y 5 en la tablet | Los dos muestran "Meta de hoy cumplida" (10 min) |
+| 40 | Avanzar en la tablet, luego abrir el mismo libro en el cel | El cel abre donde te quedaste en la tablet |
+| 41 | Marcar una cita en el cel → Sincronizar ahora en la tablet | La cita aparece en Mis citas de la tablet |
+| 42 | Cambiar la meta en la tablet | El cel toma la nueva meta |
+| 43 | Leer sin internet en ambos y luego conectar | Se suman los minutos de los dos, sin duplicar |
+| 44 | En el iPhone: Buscar libros | "Mi nube" se ve primero, sin deslizar |
 
 Anota lo que falle con el número de prueba y el modelo de celular.
 

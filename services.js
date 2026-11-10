@@ -259,44 +259,90 @@
      Inicio de sesión por redirección (no ventana emergente): funciona dentro
      de la app instalada en la pantalla de inicio del iPhone. */
   var TOKEN_KEY = 'electura-drive-token';
-  var driveToken = null, driveTokenExp = 0;
+  var driveToken = null, driveTokenExp = 0, driveScopes = '';
+  var SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.appdata';
   try {
     var saved = JSON.parse(localStorage.getItem(TOKEN_KEY) || 'null');
-    if (saved && saved.exp > Date.now()) { driveToken = saved.token; driveTokenExp = saved.exp; }
+    if (saved && saved.exp > Date.now()) { driveToken = saved.token; driveTokenExp = saved.exp; driveScopes = saved.scope || ''; }
   } catch (e) {}
   function driveConfigured() { return !!CFG.GOOGLE_CLIENT_ID; }
   function driveRedirectUri() { return location.origin + location.pathname.replace(/index\.html$/, ''); }
   function driveHasToken() { return !!driveToken && Date.now() < driveTokenExp; }
-  function driveConnect() {
+  // El permiso de sincronizar (carpeta oculta de la app) puede faltar en conexiones hechas antes de la v1.4.
+  function driveCanSync() { return driveHasToken() && driveScopes.indexOf('drive.appdata') >= 0; }
+  // purpose: 'drive' (explorar carpeta) o 'sync'. silent: intenta sin preguntar (si ya diste permiso antes).
+  function driveConnect(purpose, silent) {
     if (!driveConfigured()) return Promise.reject(new Error('Falta el Client ID de Google en config.js.'));
-    if (driveHasToken()) return Promise.resolve(driveToken);
+    purpose = purpose || 'drive';
+    if (purpose === 'drive' ? driveHasToken() : driveCanSync()) return Promise.resolve(driveToken);
     var url = 'https://accounts.google.com/o/oauth2/v2/auth' +
       '?client_id=' + encodeURIComponent(CFG.GOOGLE_CLIENT_ID) +
       '&redirect_uri=' + encodeURIComponent(driveRedirectUri()) +
       '&response_type=token' +
-      '&scope=' + encodeURIComponent('https://www.googleapis.com/auth/drive.readonly') +
-      '&include_granted_scopes=true&prompt=select_account&state=electura-drive';
+      '&scope=' + encodeURIComponent(SCOPES) +
+      '&include_granted_scopes=true&prompt=' + (silent ? 'none' : 'select_account') + '&state=electura-' + purpose;
     location.href = url;
     return new Promise(function () {});
   }
   // Se llama al abrir la app: si venimos de Google, guarda el permiso y limpia la dirección.
   function driveCaptureRedirect() {
     var h = location.hash || '';
-    if (h.indexOf('state=electura-drive') < 0) return null;
+    if (h.indexOf('state=electura-') < 0) return null;
     var p = new URLSearchParams(h.slice(1));
+    var purpose = (p.get('state') || '').replace('electura-', '') || 'drive';
     history.replaceState(null, '', location.pathname + location.search);
-    if (p.get('error')) return { error: p.get('error') };
+    if (p.get('error')) return { error: p.get('error'), purpose: purpose };
     var token = p.get('access_token');
-    if (!token) return { error: 'sin_token' };
+    if (!token) return { error: 'sin_token', purpose: purpose };
     driveToken = token;
     driveTokenExp = Date.now() + (Number(p.get('expires_in') || 3600) - 60) * 1000;
-    try { localStorage.setItem(TOKEN_KEY, JSON.stringify({ token: driveToken, exp: driveTokenExp })); } catch (e) {}
-    return { ok: true };
+    driveScopes = p.get('scope') || SCOPES;
+    try { localStorage.setItem(TOKEN_KEY, JSON.stringify({ token: driveToken, exp: driveTokenExp, scope: driveScopes })); } catch (e) {}
+    return { ok: true, purpose: purpose };
   }
   function driveForget() { driveToken = null; driveTokenExp = 0; try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
-  function driveFetch(path) {
-    return fetch('https://www.googleapis.com/drive/v3/' + path, { headers: { Authorization: 'Bearer ' + driveToken } })
-      .then(function (r) { if (r.status === 401) { driveForget(); throw new Error('La sesión de Google expiró. Toca Conectar de nuevo.'); } if (!r.ok) throw new Error('HTTP ' + r.status); return r; });
+  function driveFetch(path, opts, base) {
+    opts = opts || {};
+    var sync = !!opts.sync; delete opts.sync;
+    opts.headers = Object.assign({ Authorization: 'Bearer ' + driveToken }, opts.headers || {});
+    return fetch((base || 'https://www.googleapis.com/drive/v3/') + path, opts)
+      .then(function (r) {
+        if (r.status === 401) { driveForget(); var e = new Error('La sesión de Google expiró. Toca Conectar de nuevo.'); e.code = 'auth'; throw e; }
+        if (r.status === 403 && sync) { var f = new Error('Falta el permiso para sincronizar. Toca Conectar de nuevo.'); f.code = 'scope'; throw f; }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r;
+      });
+  }
+
+  /* ---------- Sincronización: un archivo por perfil en la carpeta oculta de la app en tu Drive ---------- */
+  function syncFileName(profileName) {
+    var slug = String(profileName || 'perfil').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'perfil';
+    return 'electura-' + slug + '.json';
+  }
+  function syncLoad(profileName) {
+    var name = syncFileName(profileName);
+    var q = "name='" + name + "' and trashed=false";
+    return driveFetch('files?spaces=appDataFolder&fields=files(id,name,modifiedTime)&q=' + encodeURIComponent(q), { sync: true })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var f = (d.files || [])[0];
+        if (!f) return { id: null, doc: null };
+        return driveFetch('files/' + f.id + '?alt=media', { sync: true }).then(function (r) { return r.json(); })
+          .then(function (doc) { return { id: f.id, doc: doc }; });
+      });
+  }
+  function syncSave(id, profileName, doc) {
+    var body = JSON.stringify(doc);
+    if (id) {
+      return driveFetch('files/' + id + '?uploadType=media', { sync: true, method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: body },
+        'https://www.googleapis.com/upload/drive/v3/').then(function (r) { return r.json(); });
+    }
+    var boundary = 'electura' + Date.now();
+    var meta = { name: syncFileName(profileName), parents: ['appDataFolder'], mimeType: 'application/json' };
+    var multipart = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta) +
+      '\r\n--' + boundary + '\r\nContent-Type: application/json\r\n\r\n' + body + '\r\n--' + boundary + '--';
+    return driveFetch('files?uploadType=multipart', { sync: true, method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + boundary }, body: multipart },
+      'https://www.googleapis.com/upload/drive/v3/').then(function (r) { return r.json(); });
   }
   function driveList(q) {
     var folder = (CFG.DRIVE_FOLDER || 'Libros').replace(/'/g, "\\'");
@@ -348,7 +394,7 @@
     storageInfo: storageInfo, requestPersist: requestPersist, downloadBlob: downloadBlob,
     DEFAULT_SOURCES: DEFAULT_SOURCES, searchGutenberg: searchGutenberg, searchOpenLibrary: searchOpenLibrary, searchOpds: searchOpds,
     define: define, translate: translate,
-    driveConfigured: driveConfigured, driveConnect: driveConnect, driveHasToken: driveHasToken, driveCaptureRedirect: driveCaptureRedirect, driveRedirectUri: driveRedirectUri, driveForget: driveForget, driveList: driveList, driveDownload: driveDownload,
+    driveConfigured: driveConfigured, driveConnect: driveConnect, driveHasToken: driveHasToken, driveCanSync: driveCanSync, syncLoad: syncLoad, syncSave: syncSave, syncFileName: syncFileName, driveCaptureRedirect: driveCaptureRedirect, driveRedirectUri: driveRedirectUri, driveForget: driveForget, driveList: driveList, driveDownload: driveDownload,
     exportBackup: exportBackup, importBackup: importBackup
   };
 })();

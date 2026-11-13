@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.5.3';
+const APP_VERSION = '1.6.0';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -135,7 +135,7 @@ function useObjectUrl(loader, deps) {
   return url;
 }
 function Cover({ book, height = 146 }) {
-  const url = useObjectUrl(() => book.hasCover ? Svc.getCover(book.id) : Promise.resolve(null), [book.id, book.hasCover]);
+  const url = useObjectUrl(() => book.hasCover ? Svc.getCover(book.id) : Promise.resolve(null), [book.id, book.hasCover, book.coverAt]);
   if (url) return <img className="cover" src={url} alt="" style={{ height }} />;
   if (book.format === 'pdf') return <div className="cover cover-pdf" style={{ height }}><IFile /><span>{book.title}</span></div>;
   return <div className="cover cover-text" style={{ height, background: hashColor(book.title) }}><span>{book.title}</span></div>;
@@ -268,7 +268,7 @@ function Stats({ profile, log, books, goalMin, onGoal, onBack }) {
 }
 
 /* ================= Biblioteca ================= */
-function Library({ profile, books, onOpen, onImportClick, go, onBookAction, todaySec, goalMin, sagas, suggestions, onReviewSagas, libView, onLibView, onNewSaga }) {
+function Library({ profile, books, onOpen, onImportClick, go, onBookAction, todaySec, goalMin, sagas, suggestions, onReviewSagas, libView, onLibView, onNewSaga, onMissingCovers }) {
   const [filter, setFilter] = useState('todos');
   const [menuFor, setMenuFor] = useState(null);
   const current = books.slice().sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0)).find(b => b.hasFile && b.openedAt && !b.finished);
@@ -387,6 +387,9 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction, toda
             <span className="stack-xs"><span>+ Abrir archivo</span><span className="tiny">Celular, iCloud o Drive</span></span>
           </button>
         </div>
+        {books.filter(b => !b.hasCover).length > 0 && (
+          <button type="button" className="btn link-btn" onClick={onMissingCovers}>Buscar portadas que faltan ({books.filter(b => !b.hasCover).length})</button>
+        )}
       </div>
 
       {menuFor && (
@@ -397,6 +400,7 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction, toda
               {menuFor.finished ? 'Marcar como no terminado' : 'Marcar como terminado'}
             </button>
             <button type="button" className="btn" onClick={() => { onBookAction('saga', menuFor); setMenuFor(null); }}>Mover a una saga…</button>
+            <button type="button" className="btn" onClick={() => { onBookAction('cover', menuFor); setMenuFor(null); }}>{menuFor.hasCover ? 'Cambiar portada…' : 'Buscar portada…'}</button>
             <button type="button" className="btn" onClick={() => { onBookAction('author', menuFor); setMenuFor(null); }}>Cambiar de autor o corregir título…</button>
             {menuFor.hasFile && menuFor.format === 'pdf' && <button type="button" className="btn primary" onClick={() => { onBookAction('convert', menuFor); setMenuFor(null); }}>Convertir a EPUB</button>}
             {menuFor.hasFile && menuFor.format === 'epub' && <button type="button" className="btn" onClick={() => { onBookAction('download', menuFor); setMenuFor(null); }}>Descargar EPUB</button>}
@@ -737,13 +741,63 @@ function AuthorEditSheet({ book, books, onSave, onClose }) {
   );
 }
 
-function BookFolderSheet({ book, saga, onAuthor, onSaga, onRemoveSaga, onClose }) {
+function CoverSearchSheet({ book, step, total, onPicked, onSkip, onRemove, onClose }) {
+  const split = splitTitle(book.title);
+  const [title, setTitle] = useState(split && !book.author ? split.title : book.title);
+  const [author, setAuthor] = useState(book.author ? authorName(book.author) : (split ? split.author : ''));
+  const [state, setState] = useState({ status: 'loading', items: [] });
+  const [saving, setSaving] = useState(null);
+  const [err, setErr] = useState('');
+  const run = () => {
+    if (!navigator.onLine) { setState({ status: 'offline', items: [] }); return; }
+    setState({ status: 'loading', items: [] }); setErr('');
+    Svc.searchCovers(title, author).then(items => setState({ status: items.length ? 'ok' : 'empty', items })).catch(() => setState({ status: 'error', items: [] }));
+  };
+  useEffect(run, [book.id]);
+  const pick = c => {
+    setSaving(c.id); setErr('');
+    Svc.setCoverFromUrl(book, c).then(meta => onPicked(meta)).catch(e => setErr(e.message || 'No se pudo guardar esa portada.')).finally(() => setSaving(null));
+  };
+  return (
+    <Sheet label="Buscar portada" onClose={onClose}>
+      <div className="row-between"><span className="sheet-title">Buscar portada</span>{total > 1 && <span className="muted small">{step} de {total}</span>}</div>
+      <div className="row-inline cover-cur"><Cover book={book} height={72} /><span className="stack-xs"><span className="strong ellipsis">{book.title}</span><span className="muted tiny">{book.author ? authorName(book.author) : 'Sin autor'}</span></span></div>
+      <div className="row-gap">
+        <input className="input grow" value={title} onChange={e => setTitle(e.target.value)} aria-label="Título para buscar" placeholder="Título" />
+        <input className="input grow" value={author} onChange={e => setAuthor(e.target.value)} aria-label="Autor para buscar" placeholder="Autor" />
+      </div>
+      <button type="button" className="btn" onClick={run}><ISearch /> Buscar de nuevo</button>
+      {state.status === 'loading' && <p className="muted">Buscando portadas…</p>}
+      {state.status === 'offline' && <div className="notice"><IWifiOff /><span>Sin conexión. Conéctate para buscar portadas.</span></div>}
+      {state.status === 'empty' && <p className="muted">No encontré portadas. Prueba con el título sin subtítulo o el apellido del autor.</p>}
+      {state.status === 'error' && <div className="notice"><span>Los servicios de portadas no respondieron. Intenta en un momento.</span></div>}
+      {state.items.length > 0 && (
+        <div className="grid3 cover-grid">
+          {state.items.map(c => (
+            <button key={c.id} type="button" className="cover-cand" disabled={!!saving} onClick={() => pick(c)} aria-label={'Usar portada de ' + c.title}>
+              <img src={c.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" />
+              <span className="tiny ellipsis">{saving === c.id ? 'Guardando…' : [c.year, c.source].filter(Boolean).join(' · ')}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {err && <p className="error small">{err}</p>}
+      <div className="row-gap">
+        {onSkip && <button type="button" className="btn grow" onClick={onSkip}>{step < total ? 'Saltar' : 'Terminar'}</button>}
+        {book.coverFromWeb && onRemove && <button type="button" className="btn grow" onClick={onRemove}>Quitar portada</button>}
+      </div>
+    </Sheet>
+  );
+}
+
+function BookFolderSheet({ book, saga, onAuthor, onSaga, onRemoveSaga, onCover, onClose }) {
   return (
     <Sheet label="Mover libro" onClose={onClose}>
       <div className="sheet-title ellipsis">{book.title}</div>
       <p className="muted small">{authorName(book.author)}{saga ? ' · ' + saga.name : ''}</p>
       <button type="button" className="btn" onClick={onAuthor}>Cambiar de autor o corregir título…</button>
       <button type="button" className="btn" onClick={onSaga}>{saga ? 'Mover a otra saga o crear una nueva…' : 'Mover a una saga o crear una nueva…'}</button>
+      <button type="button" className="btn" onClick={onCover}>{book.hasCover ? 'Cambiar portada…' : 'Buscar portada…'}</button>
       {saga && <button type="button" className="btn" onClick={onRemoveSaga}>Sacar de “{saga.name}”</button>}
     </Sheet>
   );
@@ -2103,6 +2157,7 @@ function App() {
     const done = () => refreshBooks();
     if (action === 'saga') { setSagaSheet({ type: 'pick', book: b }); return; }
     if (action === 'author') { setSagaSheet({ type: 'author', book: b }); return; }
+    if (action === 'cover') { setSagaSheet({ type: 'cover', queue: [b.id], i: 0 }); return; }
     if (action === 'finish') Svc.updateBook({ ...b, finished: !b.finished, finishedAt: !b.finished ? Date.now() : null }).then(done);
     if (action === 'free') Svc.freeBook(b).then(() => { toast('Quitado del cel. Bájalo de tu nube cuando quieras seguir.'); done(); });
     if (action === 'delete') Svc.deleteBook(b).then(() => {
@@ -2322,7 +2377,8 @@ function App() {
     screen = <Library profile={profile} books={books} onOpen={openBook} onImportClick={() => fileRef.current.click()} go={go} onBookAction={bookAction}
       todaySec={Reading.secOf(mergedLog, new Date())} goalMin={settings.goalMin || 10}
       sagas={sagas} suggestions={suggestions} onReviewSagas={() => setSagaSheet({ type: 'suggest' })}
-      libView={settings.libView || 'sagas'} onLibView={v => setSettings({ ...settings, libView: v })} onNewSaga={() => setSagaSheet({ type: 'new' })} />;
+      libView={settings.libView || 'sagas'} onLibView={v => setSettings({ ...settings, libView: v })} onNewSaga={() => setSagaSheet({ type: 'new' })}
+      onMissingCovers={() => { const q = books.filter(b => !b.hasCover).map(b => b.id); if (q.length) setSagaSheet({ type: 'cover', queue: q, i: 0 }); }} />;
   }
 
   return (
@@ -2349,10 +2405,21 @@ function App() {
         <NewSagaSheet books={books.filter(b => b.fingerprint && !sagaOf(b))} onClose={() => setSagaSheet(null)}
           onCreate={(name, list) => { createSagaFrom(name, list); setSagaSheet(null); toast('Saga creada: ' + name + '. Ábrela para cambiar el orden si hace falta.'); }} />
       )}
+      {sagaSheet && sagaSheet.type === 'cover' && books.find(b => b.id === sagaSheet.queue[sagaSheet.i]) && (() => {
+        const q = sagaSheet, book = books.find(b => b.id === q.queue[q.i]);
+        const next = () => (q.i + 1 < q.queue.length ? setSagaSheet({ ...q, i: q.i + 1 }) : setSagaSheet(null));
+        return (
+          <CoverSearchSheet key={book.id} book={book} step={q.i + 1} total={q.queue.length} onClose={() => setSagaSheet(null)}
+            onSkip={q.queue.length > 1 ? next : null}
+            onPicked={() => { refreshBooks(); toast('Portada guardada.'); next(); }}
+            onRemove={() => Svc.removeWebCover(book).then(() => { refreshBooks(); setSagaSheet(null); toast('Portada quitada.'); })} />
+        );
+      })()}
       {sagaSheet && sagaSheet.type === 'folder' && (
         <BookFolderSheet book={sagaSheet.book} saga={sagaOf(sagaSheet.book)} onClose={() => setSagaSheet(null)}
           onAuthor={() => setSagaSheet({ type: 'author', book: sagaSheet.book })}
           onSaga={() => setSagaSheet({ type: 'pick', book: sagaSheet.book })}
+          onCover={() => setSagaSheet({ type: 'cover', queue: [sagaSheet.book.id], i: 0 })}
           onRemoveSaga={() => { const sg = sagaOf(sagaSheet.book); saveSaga({ ...sg, items: sg.items.filter(it => it.key !== sagaSheet.book.fingerprint) }); setSagaSheet(null); toast('Sacado de ' + sg.name + '.'); }} />
       )}
       {sagaSheet && sagaSheet.type === 'author' && (

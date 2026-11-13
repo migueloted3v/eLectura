@@ -50,6 +50,12 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 - Cada libro, en la biblioteca o dentro de cualquier carpeta (autor o saga), tiene ⋯ para cambiarlo de autor, corregir su título, moverlo a otra saga, crear una saga nueva o sacarlo de la saga.
 - Si el título trae el autor ("William Gibson - Neuromancer"), la app propone separarlos con un toque.
 
+**Portadas desde internet**
+- Menú ⋯ de un libro → Buscar portada: hasta 6 opciones de Open Library y Google Books; tocas la correcta y se guarda en el aparato (se ve sin internet).
+- Puedes ajustar título y autor de la búsqueda; si el título trae el autor ("Autor - Título"), se separan solos.
+- Botón "Buscar portadas que faltan (N)" en la biblioteca: va libro por libro, con opción de saltar.
+- Las portadas descargadas se pueden quitar desde la misma hoja.
+
 **Medidor de lectura**
 - Cuenta solo la lectura activa: el tiempo corre con el libro en pantalla y se pausa si pasan 2 minutos sin cambiar de página o tocar la pantalla.
 - Meta diaria por perfil (5, 10, 15, 20 o 30 min) con anillo de avance y aviso al cumplirla. En la biblioteca, el chip "Hoy X de Y min" abre Mi lectura.

@@ -173,6 +173,50 @@
   function updateBook(meta) { return db.put('books', meta); }
   function getFile(id) { return db.get('files', id); }
   function getCover(id) { return db.get('files', 'cover:' + id); }
+
+  /* ---------- Portadas desde internet (Open Library y Google Books) ---------- */
+  function searchCovers(title, author) {
+    var t = String(title || '').trim(), a = String(author || '').trim();
+    if (!t) return Promise.resolve([]);
+    var ol = fetch('https://openlibrary.org/search.json?limit=12&fields=cover_i,title,author_name,first_publish_year&title=' + encodeURIComponent(t) + (a ? '&author=' + encodeURIComponent(a) : ''))
+      .then(function (r) { return r.ok ? r.json() : { docs: [] }; })
+      .then(function (d) {
+        return (d.docs || []).filter(function (x) { return x.cover_i; }).map(function (x) {
+          return { id: 'ol' + x.cover_i, thumb: 'https://covers.openlibrary.org/b/id/' + x.cover_i + '-M.jpg', url: 'https://covers.openlibrary.org/b/id/' + x.cover_i + '-L.jpg',
+            title: x.title, author: (x.author_name || [])[0] || '', year: x.first_publish_year || '', source: 'Open Library' };
+        });
+      }).catch(function () { return []; });
+    var q = 'intitle:' + t + (a ? '+inauthor:' + a : '');
+    var gb = fetch('https://www.googleapis.com/books/v1/volumes?maxResults=10&printType=books&q=' + encodeURIComponent(q))
+      .then(function (r) { return r.ok ? r.json() : { items: [] }; })
+      .then(function (d) {
+        return (d.items || []).filter(function (x) { return x.volumeInfo && x.volumeInfo.imageLinks; }).map(function (x) {
+          var vi = x.volumeInfo, img = (vi.imageLinks.thumbnail || vi.imageLinks.smallThumbnail).replace(/^http:/, 'https:').replace('&edge=curl', '');
+          return { id: 'gb' + x.id, thumb: img, url: img.replace(/zoom=\d/, 'zoom=2'), alt: img,
+            title: vi.title, author: (vi.authors || [])[0] || '', year: (vi.publishedDate || '').slice(0, 4), source: 'Google Books' };
+        });
+      }).catch(function () { return []; });
+    return Promise.all([ol, gb]).then(function (r) {
+      // Intercala ambas fuentes para que las primeras opciones sean variadas.
+      var out = [], seen = {};
+      for (var i = 0; i < 12; i++) [r[0][i], r[1][i]].forEach(function (c) { if (c && !seen[c.thumb]) { seen[c.thumb] = 1; out.push(c); } });
+      return out.slice(0, 6);
+    });
+  }
+  // Descarga la portada elegida y la guarda en el cel (se ve sin internet).
+  function setCoverFromUrl(meta, cand) {
+    var tryGet = function (u) { return fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); }); };
+    return tryGet(cand.url).catch(function () { return tryGet(cand.alt || cand.thumb); })
+      .catch(function () { throw new Error('Esa imagen no está disponible. Prueba otra.'); }).then(function (blob) {
+      if (!blob || blob.size < 300 || !/^image\//.test(blob.type || 'image/')) throw new Error('Esa imagen no está disponible. Prueba otra.');
+      var next = Object.assign({}, meta, { hasCover: true, coverFromWeb: true, coverAt: Date.now() });
+      return Promise.all([db.put('files', blob, 'cover:' + meta.id), db.put('books', next)]).then(function () { return next; });
+    });
+  }
+  function removeWebCover(meta) {
+    var next = Object.assign({}, meta, { hasCover: false, coverFromWeb: false, coverAt: Date.now() });
+    return Promise.all([db.del('files', 'cover:' + meta.id), db.put('books', next)]).then(function () { return next; });
+  }
   function freeBook(meta) {
     return db.del('files', meta.id).then(function () {
       return db.put('books', Object.assign({}, meta, { hasFile: false }));
@@ -437,7 +481,7 @@
   window.Svc = {
     kv: kv, fingerprintOf: fingerprintOf, cleanName: cleanName, uid: uid, mb: mb, formatOf: formatOf, langCode: langCode,
     listBooks: listBooks, saveBookFromBlob: saveBookFromBlob, updateBook: updateBook, readSeries: readSeries, scanSeries: scanSeries,
-    getFile: getFile, getCover: getCover, freeBook: freeBook, deleteBook: deleteBook,
+    getFile: getFile, getCover: getCover, searchCovers: searchCovers, setCoverFromUrl: setCoverFromUrl, removeWebCover: removeWebCover, freeBook: freeBook, deleteBook: deleteBook,
     storageInfo: storageInfo, requestPersist: requestPersist, downloadBlob: downloadBlob,
     DEFAULT_SOURCES: DEFAULT_SOURCES, searchGutenberg: searchGutenberg, searchOpenLibrary: searchOpenLibrary, searchOpds: searchOpds,
     define: define, translate: translate,

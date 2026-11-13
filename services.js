@@ -76,10 +76,12 @@
         var doc = new DOMParser().parseFromString(opf, 'application/xml');
         var metas = Array.prototype.slice.call(doc.getElementsByTagName('meta'));
         var attr = function (el, n) { return el.getAttribute(n) || ''; };
+        var eidEl = metas.filter(function (x) { return attr(x, 'name') === 'electura:id'; })[0];
+        var eid = eidEl ? attr(eidEl, 'content').trim() || null : null;
         var cal = metas.filter(function (x) { return attr(x, 'name') === 'calibre:series'; })[0];
         if (cal && attr(cal, 'content').trim()) {
           var idx = metas.filter(function (x) { return attr(x, 'name') === 'calibre:series_index'; })[0];
-          return { series: attr(cal, 'content').trim(), seriesIndex: idx ? parseFloat(attr(idx, 'content')) || null : null };
+          return { eid: eid, series: attr(cal, 'content').trim(), seriesIndex: idx ? parseFloat(attr(idx, 'content')) || null : null };
         }
         var coll = metas.filter(function (x) { return attr(x, 'property') === 'belongs-to-collection'; });
         for (var i = 0; i < coll.length; i++) {
@@ -88,9 +90,9 @@
           if (type && type.textContent.trim() !== 'series') continue;
           var pos = id ? ref('group-position') : null;
           var name = coll[i].textContent.trim();
-          if (name) return { series: name, seriesIndex: pos ? parseFloat(pos.textContent) || null : null };
+          if (name) return { eid: eid, series: name, seriesIndex: pos ? parseFloat(pos.textContent) || null : null };
         }
-        return {};
+        return { eid: eid };
       });
     }).catch(function () { return {}; });
   }
@@ -147,6 +149,8 @@
         ? Promise.all([readEpubMeta(buf).catch(function () { return {}; }), readSeries(buf.slice(0))]).then(function (r) { return Object.assign({}, r[0], r[1], { seriesScanned: true }); })
         : readPdfMeta(buf);
       return metaP.catch(function () { return {}; }).then(function (m) {
+        // Un EPUB que ya pasó por eLectura conserva su identidad (sagas, citas, avance) aunque cambie de tamaño.
+        if (m.eid) fingerprint = m.eid;
         return listBooks(profileId).then(function (books) {
           var existing = books.filter(function (b) { return b.fingerprint === fingerprint; })[0];
           var id = existing ? existing.id : uid();
@@ -161,8 +165,11 @@
             hasCover: !!m.cover,
             series: m.series || (existing && existing.series) || null,
             seriesIndex: m.seriesIndex || (existing && existing.seriesIndex) || null,
-            seriesScanned: !!m.seriesScanned || !!(existing && existing.seriesScanned)
+            seriesScanned: !!m.seriesScanned || !!(existing && existing.seriesScanned),
+            driveFileId: hint.driveFileId || (existing && existing.driveFileId) || null,
+            driveDirty: hint.driveFileId ? false : (existing ? !!existing.driveDirty : !!hint.upload)
           });
+          if (existing && existing.coverFromWeb && !m.cover) { meta.hasCover = true; meta.coverFromWeb = true; }
           var writes = [db.put('files', blob, id), db.put('books', meta)];
           if (m.cover) writes.push(db.put('files', m.cover, 'cover:' + id));
           return Promise.all(writes).then(function () { return { meta: meta, reattached: !!existing }; });
@@ -351,7 +358,7 @@
      de la app instalada en la pantalla de inicio del iPhone. */
   var TOKEN_KEY = 'electura-drive-token';
   var driveToken = null, driveTokenExp = 0, driveScopes = '';
-  var SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.appdata';
+  var SCOPES = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.appdata';
   try {
     var saved = JSON.parse(localStorage.getItem(TOKEN_KEY) || 'null');
     if (saved && saved.exp > Date.now()) { driveToken = saved.token; driveTokenExp = saved.exp; driveScopes = saved.scope || ''; }
@@ -361,11 +368,12 @@
   function driveHasToken() { return !!driveToken && Date.now() < driveTokenExp; }
   // El permiso de sincronizar (carpeta oculta de la app) puede faltar en conexiones hechas antes de la v1.4.
   function driveCanSync() { return driveHasToken() && driveScopes.indexOf('drive.appdata') >= 0; }
+  function driveCanWrite() { return driveHasToken() && driveScopes.split(/\s+/).indexOf('https://www.googleapis.com/auth/drive') >= 0; }
   // purpose: 'drive' (explorar carpeta) o 'sync'. silent: intenta sin preguntar (si ya diste permiso antes).
   function driveConnect(purpose, silent) {
     if (!driveConfigured()) return Promise.reject(new Error('Falta el Client ID de Google en config.js.'));
     purpose = purpose || 'drive';
-    if (purpose === 'drive' ? driveHasToken() : driveCanSync()) return Promise.resolve(driveToken);
+    if (purpose === 'drive' ? driveCanWrite() : driveCanSync() && driveCanWrite()) return Promise.resolve(driveToken);
     var url = 'https://accounts.google.com/o/oauth2/v2/auth' +
       '?client_id=' + encodeURIComponent(CFG.GOOGLE_CLIENT_ID) +
       '&redirect_uri=' + encodeURIComponent(driveRedirectUri()) +
@@ -399,7 +407,7 @@
     return fetch((base || 'https://www.googleapis.com/drive/v3/') + path, opts)
       .then(function (r) {
         if (r.status === 401) { driveForget(); var e = new Error('La sesión de Google expiró. Toca Conectar de nuevo.'); e.code = 'auth'; throw e; }
-        if (r.status === 403 && sync) { var f = new Error('Falta el permiso para sincronizar. Toca Conectar de nuevo.'); f.code = 'scope'; throw f; }
+        if (r.status === 403 && (sync || (base && base.indexOf('upload') >= 0 && opts.method === 'PATCH') || opts.write)) { var f = new Error('Falta el permiso para sincronizar. Toca Conectar de nuevo.'); f.code = 'scope'; f.message = sync ? f.message : 'Falta el permiso para guardar en tu Drive. Toca Conectar de nuevo.'; throw f; }
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r;
       });
@@ -449,6 +457,32 @@
   function driveDownload(file) {
     return driveFetch('files/' + file.id + '?alt=media').then(function (r) { return r.blob(); });
   }
+  // Carpeta donde se suben libros: si hay una compartida contigo (la de la familia) y puedes escribir, esa; si no, la tuya.
+  var targetFolder = null;
+  function driveTargetFolder() {
+    if (targetFolder) return Promise.resolve(targetFolder);
+    var folder = (CFG.DRIVE_FOLDER || 'Libros').replace(/'/g, "\\'");
+    var fq = "mimeType='application/vnd.google-apps.folder' and name='" + folder + "' and trashed=false";
+    return driveFetch('files?fields=files(id,name,ownedByMe,capabilities/canAddChildren)&q=' + encodeURIComponent(fq)).then(function (r) { return r.json(); }).then(function (d) {
+      var ok = (d.files || []).filter(function (f) { return !f.capabilities || f.capabilities.canAddChildren !== false; });
+      var pick = ok.filter(function (f) { return !f.ownedByMe; })[0] || ok[0];
+      if (!pick) throw new Error('No encontré una carpeta "' + (CFG.DRIVE_FOLDER || 'Libros') + '" en la que puedas guardar.');
+      targetFolder = pick.id;
+      return targetFolder;
+    });
+  }
+  function driveUpdateFile(id, blob, mime) {
+    return driveFetch('files/' + id + '?uploadType=media&fields=id,size', { method: 'PATCH', headers: { 'Content-Type': mime }, body: blob },
+      'https://www.googleapis.com/upload/drive/v3/').then(function (r) { return r.json(); });
+  }
+  function driveCreateFile(folderId, name, blob, mime) {
+    var boundary = 'electura' + Date.now();
+    var meta = { name: name, parents: [folderId], mimeType: mime };
+    var body = new Blob(['--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta) +
+      '\r\n--' + boundary + '\r\nContent-Type: ' + mime + '\r\n\r\n', blob, '\r\n--' + boundary + '--']);
+    return driveFetch('files?uploadType=multipart&fields=id,size', { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + boundary }, body: body },
+      'https://www.googleapis.com/upload/drive/v3/').then(function (r) { return r.json(); });
+  }
 
   /* ---------- Respaldo ---------- */
   function exportBackup() {
@@ -485,7 +519,7 @@
     storageInfo: storageInfo, requestPersist: requestPersist, downloadBlob: downloadBlob,
     DEFAULT_SOURCES: DEFAULT_SOURCES, searchGutenberg: searchGutenberg, searchOpenLibrary: searchOpenLibrary, searchOpds: searchOpds,
     define: define, translate: translate,
-    driveConfigured: driveConfigured, driveConnect: driveConnect, driveHasToken: driveHasToken, driveCanSync: driveCanSync, syncLoad: syncLoad, syncSave: syncSave, syncFileName: syncFileName, driveCaptureRedirect: driveCaptureRedirect, driveRedirectUri: driveRedirectUri, driveForget: driveForget, driveList: driveList, driveDownload: driveDownload,
+    driveConfigured: driveConfigured, driveConnect: driveConnect, driveHasToken: driveHasToken, driveCanSync: driveCanSync, driveCanWrite: driveCanWrite, driveTargetFolder: driveTargetFolder, driveUpdateFile: driveUpdateFile, driveCreateFile: driveCreateFile, syncLoad: syncLoad, syncSave: syncSave, syncFileName: syncFileName, driveCaptureRedirect: driveCaptureRedirect, driveRedirectUri: driveRedirectUri, driveForget: driveForget, driveList: driveList, driveDownload: driveDownload,
     exportBackup: exportBackup, importBackup: importBackup
   };
 })();

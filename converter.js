@@ -326,5 +326,88 @@
     return Promise.resolve('downloaded');
   }
 
-  window.Conv = { kindOf: kindOf, toEpub: toEpub, docxToEpub: docxToEpub, pdfToEpub: pdfToEpub, buildEpub: buildEpub, saveToDevice: saveToDevice, guessLang: guessLang, MAMMOTH_URL: MAMMOTH_URL };
+  /* ---------- Escribir correcciones dentro de un EPUB ----------
+     Título, autor, saga (formato Calibre), portada e identidad de eLectura (electura:id). */
+  var OPF_NS = 'http://www.idpf.org/2007/opf', DC_NS = 'http://purl.org/dc/elements/1.1/';
+  function rewriteEpub(blob, info) {
+    return blob.arrayBuffer().then(function (buf) { return JSZip.loadAsync(buf); }).then(function (zip) {
+      var cont = zip.file('META-INF/container.xml');
+      if (!cont) throw new Error('EPUB sin container.xml');
+      return cont.async('string').then(function (xml) {
+        var m = xml.match(/full-path\s*=\s*["']([^"']+)["']/);
+        var opfPath = m ? decodeURIComponent(m[1]) : null;
+        var f = opfPath && zip.file(opfPath);
+        if (!f) throw new Error('EPUB sin OPF');
+        return f.async('string').then(function (opf) { return { zip: zip, opfPath: opfPath, opf: opf }; });
+      });
+    }).then(function (x) {
+      var doc = new DOMParser().parseFromString(x.opf, 'application/xml');
+      if (doc.getElementsByTagName('parsererror').length) throw new Error('OPF no válido');
+      var pkg = doc.documentElement;
+      var md = doc.getElementsByTagNameNS(OPF_NS, 'metadata')[0] || doc.getElementsByTagName('metadata')[0];
+      var man = doc.getElementsByTagNameNS(OPF_NS, 'manifest')[0] || doc.getElementsByTagName('manifest')[0];
+      var dc = function (tag) { return Array.prototype.slice.call(md.getElementsByTagNameNS(DC_NS, tag)); };
+      var setDc = function (tag, value) {
+        var els = dc(tag);
+        if (!value) return;
+        if (els.length) { els[0].textContent = value; return; }
+        var el = doc.createElementNS(DC_NS, 'dc:' + tag); el.textContent = value; md.appendChild(el);
+      };
+      setDc('title', info.title);
+      if (info.author) {
+        var cr = dc('creator');
+        cr.slice(1).forEach(function (e) { e.parentNode.removeChild(e); });
+        setDc('creator', info.author);
+        if (cr[0]) ['opf:file-as', 'file-as'].forEach(function (a) { cr[0].removeAttribute(a); });
+      }
+      var metas = function () { return Array.prototype.slice.call(md.getElementsByTagName('meta')); };
+      var addMeta = function (name, content) { var e = doc.createElementNS(OPF_NS, 'meta'); e.setAttribute('name', name); e.setAttribute('content', content); md.appendChild(e); };
+      metas().forEach(function (e) {
+        var n = e.getAttribute('name');
+        if (n === 'calibre:series' || n === 'calibre:series_index' || n === 'electura:id') e.parentNode.removeChild(e);
+      });
+      if (info.series) {
+        addMeta('calibre:series', info.series);
+        if (info.seriesIndex) addMeta('calibre:series_index', String(info.seriesIndex));
+        // EPUB 3: la colección dice lo mismo que Calibre para que no haya dos sagas distintas.
+        metas().forEach(function (e) {
+          if (e.getAttribute('property') !== 'belongs-to-collection') return;
+          var id = e.getAttribute('id');
+          metas().forEach(function (r) { if (id && r.getAttribute('refines') === '#' + id) r.parentNode.removeChild(r); });
+          e.parentNode.removeChild(e);
+        });
+      }
+      if (info.eid) addMeta('electura:id', info.eid);
+
+      var coverP = Promise.resolve();
+      if (info.cover) {
+        var ext = /png/.test(info.cover.type) ? 'png' : 'jpg', type = ext === 'png' ? 'image/png' : 'image/jpeg';
+        var dir = x.opfPath.indexOf('/') >= 0 ? x.opfPath.slice(0, x.opfPath.lastIndexOf('/') + 1) : '';
+        var href = 'electura-cover.' + ext;
+        Array.prototype.slice.call(man.getElementsByTagName('item')).forEach(function (it) {
+          var props = (it.getAttribute('properties') || '').split(/\s+/).filter(function (p) { return p && p !== 'cover-image'; });
+          if (props.length) it.setAttribute('properties', props.join(' ')); else it.removeAttribute('properties');
+          if (it.getAttribute('id') === 'electura-cover') it.parentNode.removeChild(it);
+        });
+        metas().forEach(function (e) { if (e.getAttribute('name') === 'cover') e.parentNode.removeChild(e); });
+        var item = doc.createElementNS(OPF_NS, 'item');
+        item.setAttribute('id', 'electura-cover'); item.setAttribute('href', href); item.setAttribute('media-type', type);
+        if ((pkg.getAttribute('version') || '').charAt(0) === '3') item.setAttribute('properties', 'cover-image');
+        man.appendChild(item);
+        addMeta('cover', 'electura-cover');
+        coverP = info.cover.arrayBuffer().then(function (b) { x.zip.file(dir + href, b); });
+      }
+      return coverP.then(function () {
+        x.zip.file(x.opfPath, new XMLSerializer().serializeToString(doc));
+        // Se rearma el zip con "mimetype" primero y sin comprimir, como pide el estándar.
+        var out = new JSZip();
+        out.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+        var names = Object.keys(x.zip.files).filter(function (n) { return n !== 'mimetype' && !x.zip.files[n].dir; });
+        return Promise.all(names.map(function (n) { return x.zip.file(n).async('uint8array').then(function (d) { out.file(n, d); }); }))
+          .then(function () { return out.generateAsync({ type: 'blob', mimeType: 'application/epub+zip', compression: 'DEFLATE' }); });
+      });
+    });
+  }
+
+  window.Conv = { kindOf: kindOf, toEpub: toEpub, docxToEpub: docxToEpub, pdfToEpub: pdfToEpub, buildEpub: buildEpub, saveToDevice: saveToDevice, guessLang: guessLang, rewriteEpub: rewriteEpub, MAMMOTH_URL: MAMMOTH_URL };
 })();

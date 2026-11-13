@@ -80,6 +80,16 @@ Al tocar **Conectar Google Drive**, la app se va a la página de Google y regres
 
 Tus hijas no necesitan activarlo: si no lo activan, su app nunca se conecta a Google.
 
+## 5c. Compartir la biblioteca con tu familia
+
+1. **Google Cloud → Google Auth Platform → Público → Usuarios de prueba:** agrega el Gmail de cada familiar.
+2. **Google Drive:** clic derecho en tu carpeta **eBooks → Compartir**, agrega sus correos como **Editor** (pueden subir y corregir) o **Lector** (solo leer).
+3. Cada familiar abre el enlace de la app en su cel, **Agregar a pantalla de inicio**, crea su perfil y va a **Buscar libros → Mi nube → Google Drive → Conectar**. Verá tu carpeta compartida.
+4. Al bajar un libro, llega con título, autor, portada y saga ya corregidos; la app les sugiere crear las sagas.
+5. En tus aparatos, la primera vez que abras la v1.7 Google te pedirá permiso de nuevo (ahora para guardar en tu Drive). En Ajustes → **Mi carpeta de Google Drive** ves si todo está guardado.
+
+Opcional en Google Cloud → *Acceso a datos*: cambia `drive.readonly` por `.../auth/drive`. En modo prueba funciona aunque no lo cambies.
+
 ## 6. Pruebas de la v1
 
 Hazlas en al menos un iPhone y un Android.
@@ -145,6 +155,11 @@ Hazlas en al menos un iPhone y un Android.
 | 57 | ⋯ de un libro sin imagen → Buscar portada → tocar una | La portada aparece en la biblioteca y en su carpeta |
 | 58 | Biblioteca → Buscar portadas que faltan | Va libro por libro; Saltar pasa al siguiente |
 | 59 | Modo avión después de poner portadas | Las portadas se siguen viendo |
+| 60 | Corregir autor o portada de un libro bajado de Drive | En Ajustes pasa a "Todo guardado"; en Drive el archivo tiene fecha nueva |
+| 61 | Abrir un libro de Gutenberg o de archivo | Aparece en tu carpeta eBooks de Drive |
+| 62 | Familiar baja un libro corregido | Lo ve con título, autor, portada y le sugiere la saga |
+| 63 | Corregir en la tablet, abrir el cel con sincronización | El cel muestra el título, autor y portada nuevos |
+| 64 | Inicio de la app | Junto al ícono de Ajustes se ve la versión |
 
 Anota lo que falle con el número de prueba y el modelo de celular.
 

@@ -88,11 +88,22 @@
       if (!r || (l.at || 0) > (r.at || 0)) progress[k] = l;
     });
 
+    var meta = Object.assign({}, remote.meta || {});
+    Object.keys(local.meta || {}).forEach(function (k) {
+      var l = local.meta[k], r = meta[k];
+      if (!r) { meta[k] = l; return; }
+      var m = Object.assign({}, r);
+      if ((l.metaAt || 0) >= (r.metaAt || 0)) { m.title = l.title; m.author = l.author; m.metaAt = l.metaAt; }
+      if ((l.coverAt || 0) >= (r.coverAt || 0)) m.coverAt = l.coverAt;
+      if ((l.drivePushedAt || 0) >= (r.drivePushedAt || 0)) { m.drivePushedAt = l.drivePushedAt; m.driveFileId = l.driveFileId || r.driveFileId; }
+      m.driveFileId = m.driveFileId || l.driveFileId || r.driveFileId;
+      meta[k] = m;
+    });
     var q = mergeItems(local.quotes, local.quotesDeleted, remote.quotes);
     var w = mergeItems(local.vocab, local.vocabDeleted, remote.vocab);
     var sg = mergeItems(local.sagas, local.sagasDeleted, remote.sagas);
 
-    var doc = { v: 1, profile: local.profile, updatedAt: now, devices: devices, settings: settings, progress: progress, quotes: q.map, vocab: w.map, sagas: sg.map };
+    var doc = { v: 1, profile: local.profile, updatedAt: now, devices: devices, settings: settings, progress: progress, quotes: q.map, vocab: w.map, sagas: sg.map, meta: meta };
     var others = {};
     Object.keys(devices).forEach(function (id) { if (id !== local.deviceId) others[id] = devices[id]; });
     return {
@@ -103,7 +114,8 @@
         progress: progress,
         quotes: q.items, quotesDeleted: q.deleted,
         vocab: w.items, vocabDeleted: w.deleted,
-        sagas: sg.items, sagasDeleted: sg.deleted
+        sagas: sg.items, sagasDeleted: sg.deleted,
+        meta: meta
       }
     };
   }

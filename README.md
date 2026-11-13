@@ -56,6 +56,14 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 - Botón "Buscar portadas que faltan (N)" en la biblioteca: va libro por libro, con opción de saltar.
 - Las portadas descargadas se pueden quitar desde la misma hoja.
 
+**Biblioteca familiar en Google Drive**
+- Las correcciones (título, autor, portada y saga con su número de tomo, en formato Calibre) se escriben dentro de cada EPUB y se guardan en tu carpeta de Drive automáticamente.
+- Los libros que agregas de otras fuentes (archivo, iCloud, Gutenberg, Open Library, conversiones) se suben a esa carpeta.
+- Cada EPUB lleva una identidad de eLectura, así sagas, citas y avance se conservan aunque el archivo cambie.
+- Comparte la carpeta con tu familia (Lector o Editor): al bajar los libros desde Mi nube, su app los recibe corregidos y arma las sagas sola. Si los compartes como Editor, sus correcciones también se guardan en la carpeta.
+- Entre tus propios aparatos, título, autor y portada corregidos también se sincronizan.
+- Drive conserva versiones anteriores de cada archivo por si una corrección sale mal.
+
 **Medidor de lectura**
 - Cuenta solo la lectura activa: el tiempo corre con el libro en pantalla y se pausa si pasan 2 minutos sin cambiar de página o tocar la pantalla.
 - Meta diaria por perfil (5, 10, 15, 20 o 30 min) con anillo de avance y aviso al cumplirla. En la biblioteca, el chip "Hoy X de Y min" abre Mi lectura.
@@ -66,7 +74,7 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 
 **Sincronizar entre aparatos**
 - Con la misma cuenta de Google, suma los minutos leídos en cel y tablet, y mantiene igual la página donde vas, citas, vocabulario, meta y ajustes.
-- Usa la carpeta oculta de la app en tu Google Drive (permiso `drive.appdata`): no ve ni toca tus otros archivos. Los libros no se suben.
+- Usa la carpeta oculta de la app en tu Google Drive (permiso `drive.appdata`; para escribir en tu carpeta de libros usa el permiso `drive`): no ve ni toca tus otros archivos. Los libros no se suben.
 - Cada aparato escribe su propia parte, así que leer en dos aparatos sin internet no duplica ni pierde minutos. Los ajustes, citas y páginas se mezclan por fecha de cambio.
 - Se activa por perfil en Ajustes; los perfiles que no la activan nunca se conectan a Google.
 - Sincroniza al abrir, cada 5 minutos, al volver a la app y al salir de un libro. Google pide permiso cada hora; la app lo renueva sola al abrir.

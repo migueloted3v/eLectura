@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -295,6 +295,7 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction, toda
             {profile.name.slice(0, 1).toUpperCase()}
           </button>
           <button type="button" className="icon-btn" aria-label="Ajustes" onClick={() => go('settings')}><ISliders /></button>
+          <span className="version-tag" aria-label={'Versión ' + APP_VERSION}>v{APP_VERSION}</span>
         </div>
       </header>
       <div className="content">
@@ -1587,7 +1588,7 @@ function CloudPanel({ books, onImportClick, onSaveBlob, initialCloud }) {
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState({});
-  const prints = useMemo(() => new Set(books.filter(b => b.hasFile).map(b => b.fingerprint)), [books]);
+  const prints = useMemo(() => new Set(books.filter(b => b.hasFile).flatMap(b => [b.fingerprint, b.driveFileId].filter(Boolean))), [books]);
   const load = () => {
     setStatus('Leyendo tu carpeta…');
     Svc.driveList('').then(f => { setFiles(f); setStatus(''); }).catch(e => { setFiles(null); setStatus(e.message); });
@@ -1597,7 +1598,7 @@ function CloudPanel({ books, onImportClick, onSaveBlob, initialCloud }) {
   const search = () => { setStatus('Buscando…'); Svc.driveList(q.trim()).then(f => { setFiles(f); setStatus(''); }).catch(e => setStatus(e.message)); };
   const get = f => {
     setBusy(b => ({ ...b, [f.id]: true }));
-    Svc.driveDownload(f).then(blob => onSaveBlob(blob, f.name, { source: 'Google Drive' }))
+    Svc.driveDownload(f).then(blob => onSaveBlob(blob, f.name, { source: 'Google Drive', driveFileId: f.id }))
       .catch(e => setStatus(e.message)).finally(() => setBusy(b => ({ ...b, [f.id]: false })));
   };
   return (
@@ -1634,7 +1635,7 @@ function CloudPanel({ books, onImportClick, onSaveBlob, initialCloud }) {
           {files.length > 0 && (
             <div className="card list">
               {files.map(f => {
-                const have = prints.has(Svc.fingerprintOf(f.name, Number(f.size)));
+                const have = prints.has(f.id) || prints.has(Svc.fingerprintOf(f.name, Number(f.size)));
                 return (
                   <div key={f.id} className="row result">
                     <span className="stack-xs grow"><span className="strong">{f.name}</span><span className="muted small">{f.size ? Svc.mb(Number(f.size)) : ''}</span></span>
@@ -1743,7 +1744,7 @@ function Vocab({ words, onDelete, onBack }) {
 }
 
 /* ================= Ajustes ================= */
-function Settings({ settings, onChange, profile, profiles, sources, go, onBack, onExport, onImportBackup, onDeleteProfile, vocabCount, quotesCount, books, syncInfo, onSync }) {
+function Settings({ settings, onChange, profile, profiles, sources, go, onBack, onExport, onImportBackup, onDeleteProfile, vocabCount, quotesCount, books, syncInfo, onSync, driveInfo, onDriveConnect, onDrivePush }) {
   const [storage, setStorage] = useState(null);
   const restoreRef = useRef(null);
   useEffect(() => { Svc.storageInfo().then(setStorage); }, [books.length]);
@@ -1864,6 +1865,21 @@ function Settings({ settings, onChange, profile, profiles, sources, go, onBack, 
           {(syncInfo.status === 'needs-auth' || !settings.syncEnabled) && <p className="muted tiny">Dirección de regreso que debe estar registrada en Google Cloud: <code>{Svc.driveRedirectUri()}</code></p>}
           {settings.syncEnabled && <div className="row-between"><span className="stack-xs"><span>Reconectar solo al abrir</span><span className="muted small">Google pide permiso cada hora; la app lo renueva sola cuando abres</span></span><Toggle on={settings.syncAuto !== false} label="Reconectar solo al abrir" onChange={v => onChange({ ...settings, syncAuto: v })} /></div>}
           {settings.syncEnabled && <button type="button" className="btn sm" onClick={() => onChange({ ...settings, syncEnabled: false })}>Dejar de sincronizar en este aparato</button>}
+        </div>
+
+        <h2 className="section">Mi carpeta de Google Drive</h2>
+        <div className="card pad stack">
+          <p className="small">Tus correcciones (título, autor, portada y saga) se guardan dentro de cada EPUB en tu carpeta "{CFG.DRIVE_FOLDER || 'Libros'}", y los libros que agregues de otras fuentes se suben ahí. Quien tenga la carpeta compartida los recibe ya corregidos.</p>
+          <div className="row-between">
+            <span className="stack-xs">
+              <span className="strong">{settings.driveWrite === false ? 'Desactivado' : !Svc.driveCanWrite() ? 'Conecta Google para guardar' : driveInfo.status === 'saving' ? 'Guardando en Drive…' : driveInfo.status === 'error' ? 'No se pudo guardar' : driveInfo.pending ? driveInfo.pending + ' cambios por guardar' : 'Todo guardado en tu Drive'}</span>
+              <span className="muted tiny">{driveInfo.status === 'error' && driveInfo.error ? driveInfo.error : 'Google Drive guarda versiones anteriores de cada archivo'}</span>
+            </span>
+            {settings.driveWrite !== false && (!Svc.driveCanWrite() || driveInfo.status === 'needs-auth'
+              ? <button type="button" className="btn primary sm" onClick={onDriveConnect}>Conectar</button>
+              : <button type="button" className="btn sm" disabled={driveInfo.status === 'saving'} onClick={onDrivePush}>Guardar ahora</button>)}
+          </div>
+          <div className="row-between"><span className="stack-xs"><span>Guardar en Drive automáticamente</span><span className="muted small">En este aparato</span></span><Toggle on={settings.driveWrite !== false} label="Guardar en Drive automáticamente" onChange={v => onChange({ ...settings, driveWrite: v })} /></div>
         </div>
 
         <h2 className="section">Perfiles</h2>
@@ -2116,16 +2132,16 @@ function App() {
       const kind = Conv.kindOf(f.name, f.type);
       if (kind === 'docx' || kind === 'pdf') { toConvert.push({ id: Svc.uid(), source: 'import', kind, blob: f, name: f.name }); return; }
       if (kind === 'doc') { toast('Los .doc antiguos no se pueden abrir. Guárdalo como .docx en Word y vuelve a intentar.'); return; }
-      return saveBlob(f, f.name, { source: 'archivo' });
+      return saveBlob(f, f.name, { source: 'archivo', upload: true });
     }), Promise.resolve()).then(() => { if (toConvert.length) setConvertQueue(q => [...q, ...toConvert]); });
   };
   const nextConvert = () => setConvertQueue(q => q.slice(1));
-  const saveConverted = r => saveBlob(r.blob, r.title + '.epub', { title: r.title, author: r.author, lang: r.lang, source: 'conversión' });
-  const keepOriginal = job => { if (job.source === 'import') saveBlob(job.blob, job.name, { source: 'archivo' }); };
+  const saveConverted = r => saveBlob(r.blob, r.title + '.epub', { title: r.title, author: r.author, lang: r.lang, source: 'conversión', upload: true });
+  const keepOriginal = job => { if (job.source === 'import') saveBlob(job.blob, job.name, { source: 'archivo', upload: true }); };
   const deleteOriginal = book => Svc.deleteBook(book).then(refreshBooks);
 
   const saveRemote = r => Svc.downloadBlob(r.download)
-    .then(blob => saveBlob(blob, r.title + '.' + r.format, { title: r.title, author: r.author, lang: r.lang, source: r.page }))
+    .then(blob => saveBlob(blob, r.title + '.' + r.format, { title: r.title, author: r.author, lang: r.lang, source: r.page, upload: true }))
     .catch(() => {
       toast('Este sitio no permite descargar desde la app. Te abro la página para bajarlo y luego usa Abrir archivo.');
       window.open(r.page, '_blank', 'noopener');
@@ -2235,18 +2251,39 @@ function App() {
         progress[b.fingerprint] = { cfi: b.progress.cfi || null, percent: b.progress.percent ?? null, page: b.progress.page || null, title: b.title, at: b.openedAt || 0 };
       }
     });
+    const meta = {};
+    L.books.forEach(b => {
+      if (b.fingerprint && (b.metaAt || b.coverAt || b.driveFileId)) {
+        meta[b.fingerprint] = { title: b.title, author: b.author || '', metaAt: b.metaAt || 0, coverAt: b.coverAt || 0, driveFileId: b.driveFileId || null,
+          drivePushedAt: b.drivePushedAt || 0, at: Math.max(b.metaAt || 0, b.coverAt || 0, b.drivePushedAt || 0) };
+      }
+    });
     const { _ts, _at, ...settingsValue } = L.settings;
     const local = {
       deviceId: Sync.deviceId(), deviceName: Sync.deviceName(), profile: L.profile.name,
       reading: L.readingLog, settings: { value: settingsValue, ts: _ts || {} },
       quotes: L.quotes, quotesDeleted: tombs.current.quotes, vocab: L.vocab, vocabDeleted: tombs.current.vocab, progress,
-      sagas: L.sagas, sagasDeleted: tombs.current.sagas || {}
+      sagas: L.sagas, sagasDeleted: tombs.current.sagas || {}, meta
     };
     return Svc.syncLoad(L.profile.name).then(({ id, doc }) => {
       const m = Sync.merge(local, doc);
       return Svc.syncSave(id, L.profile.name, m.doc).then(() => m.apply);
     }).then(a => {
       setOthersLog(a.others); Svc.kv.set('reading-others:' + pid, a.others);
+      // Correcciones hechas en otro aparato: título y autor al instante; la portada se baja del EPUB ya guardado en Drive.
+      const metaUpdates = L.books.filter(b => b.fingerprint && a.meta[b.fingerprint]).map(b => {
+        const r = a.meta[b.fingerprint];
+        const tasks = [];
+        if ((r.metaAt || 0) > (b.metaAt || 0) || (!b.driveFileId && r.driveFileId)) {
+          tasks.push(Svc.updateBook({ ...b, title: (r.metaAt || 0) > (b.metaAt || 0) ? r.title : b.title, author: (r.metaAt || 0) > (b.metaAt || 0) ? r.author : b.author,
+            metaAt: Math.max(r.metaAt || 0, b.metaAt || 0), driveFileId: b.driveFileId || r.driveFileId }));
+        }
+        if ((r.coverAt || 0) > (b.coverAt || 0) && r.driveFileId && (r.drivePushedAt || 0) >= r.coverAt && b.hasFile && Svc.driveHasToken()) {
+          tasks.push(Svc.driveDownload({ id: r.driveFileId }).then(blob => Svc.saveBookFromBlob(blob, b.title + '.epub', pid, { driveFileId: r.driveFileId }))
+            .then(res => Svc.updateBook({ ...res.meta, coverAt: r.coverAt, metaAt: Math.max(r.metaAt || 0, b.metaAt || 0) })).catch(() => {}));
+        }
+        return Promise.all(tasks);
+      });
       if (a.settings) {
         const cur = latest.current.settings;
         const v = { ...cur, ...a.settings.value, syncEnabled: true, syncAuto: cur.syncAuto, _ts: { ...(cur._ts || {}), ...a.settings.ts } };
@@ -2270,7 +2307,7 @@ function App() {
         .concat(Object.values(a.others).map(d => ({ name: d.name, sec: ((d.reading || {})[today] || {}).sec || 0, at: d.at })));
       const info = { at: Date.now(), devices };
       setSyncInfo({ ...info, status: 'ok' }); Svc.kv.set('sync-meta:' + pid, info);
-      return Promise.all(updates).then(() => { if (updates.length) refreshBooks(); if (reason === 'manual') toast('Sincronizado con tus otros aparatos.'); });
+      return Promise.all(updates.concat(metaUpdates)).then(() => { if (updates.length || metaUpdates.length) refreshBooks(); if (reason === 'manual') toast('Sincronizado con tus otros aparatos.'); });
     }).catch(e => {
       setSyncInfo(i => ({ ...i, status: e.code === 'auth' || e.code === 'scope' ? 'needs-auth' : 'error' }));
       if (reason === 'manual') toast(e.message || 'No se pudo sincronizar.');
@@ -2289,6 +2326,72 @@ function App() {
 
   /* ---------- Sagas ---------- */
   const persistSagas = next => { setSagas(next); Svc.kv.set('sagas:' + pid, next); };
+
+  /* ---------- Guardar correcciones y libros en la carpeta de Drive ---------- */
+  const [driveInfo, setDriveInfo] = useState({ status: '', pending: 0 });
+  const driveBusy = useRef(false), driveTimer = useRef(null);
+  const pushDrive = useCallback(() => {
+    if (driveBusy.current || !pid) return Promise.resolve();
+    if (settingsRef.current.driveWrite === false || !Svc.driveCanWrite() || !navigator.onLine) return Promise.resolve();
+    driveBusy.current = true;
+    return Svc.listBooks(pid).then(list => {
+      const queue = list.filter(b => b.driveDirty && b.hasFile && (b.format === 'epub' || b.format === 'pdf'));
+      setDriveInfo({ status: queue.length ? 'saving' : 'ok', pending: queue.length });
+      if (!queue.length) return;
+      let remoteFiles = null;
+      const findRemote = b => (remoteFiles ? Promise.resolve(remoteFiles) : Svc.driveList('').then(f => (remoteFiles = f)).catch(() => (remoteFiles = [])))
+        .then(files => { const f = files.find(x => Svc.fingerprintOf(x.name, Number(x.size)) === b.fingerprint); return f ? f.id : null; });
+      return queue.reduce((p, b) => p.then(() => Promise.all([Svc.getFile(b.id), b.coverFromWeb ? Svc.getCover(b.id) : null]).then(([blob, cover]) => {
+        if (!blob) return;
+        const mime = b.format === 'pdf' ? 'application/pdf' : 'application/epub+zip';
+        const out = b.format === 'epub'
+          ? Conv.rewriteEpub(blob, { title: b.title, author: b.author, series: b.series, seriesIndex: b.seriesIndex, cover: cover, eid: b.fingerprint }).catch(() => blob)
+          : Promise.resolve(blob);
+        return out.then(file => (b.driveFileId ? Promise.resolve(b.driveFileId) : findRemote(b)).then(id => {
+          const name = (b.author ? authorName(b.author) + ' - ' : '') + b.title.replace(/[\\/:*?"<>|]+/g, ' ') + '.' + b.format;
+          const create = () => Svc.driveTargetFolder().then(folder => Svc.driveCreateFile(folder, name, file, mime));
+          return (id ? Svc.driveUpdateFile(id, file, mime).catch(e => (/404/.test(e.message) ? create() : Promise.reject(e))) : create());
+        })).then(res => Svc.listBooks(pid).then(cur => {
+          const now = cur.find(x => x.id === b.id) || b;
+          return Svc.updateBook({ ...now, driveFileId: res.id, driveDirty: false, drivePushedAt: Date.now() });
+        })).then(() => setDriveInfo(i => ({ ...i, pending: Math.max(0, i.pending - 1) })));
+      })), Promise.resolve()).then(() => { setDriveInfo({ status: 'ok', pending: 0, at: Date.now() }); return refreshBooks(); });
+    }).catch(e => {
+      setDriveInfo(i => ({ ...i, status: e.code === 'auth' || e.code === 'scope' ? 'needs-auth' : 'error', error: e.message }));
+    }).finally(() => { driveBusy.current = false; });
+  }, [pid]);
+  const scheduleDrive = () => { clearTimeout(driveTimer.current); driveTimer.current = setTimeout(pushDrive, 2500); };
+  // Una sola vez: lo que corregiste antes de esta versión y los libros que no vienen de Drive quedan pendientes de guardar.
+  useEffect(() => {
+    if (!pid) return;
+    Svc.kv.get('drive-migrated:' + pid, false).then(done => {
+      if (done) return;
+      return Svc.listBooks(pid).then(list => Promise.all(list.filter(b => b.hasFile && !b.driveFileId && !b.driveDirty &&
+        (b.metaAt || b.coverFromWeb || b.seriesFromApp || b.source !== 'Google Drive')).map(b => Svc.updateBook({ ...b, driveDirty: true }))))
+        .then(() => Svc.kv.set('drive-migrated:' + pid, true)).then(refreshBooks);
+    });
+  }, [pid]);
+  useEffect(() => {
+    if (!pid) return;
+    const t = setTimeout(pushDrive, 4000);
+    const onOnline = () => pushDrive();
+    window.addEventListener('online', onOnline);
+    return () => { clearTimeout(t); window.removeEventListener('online', onOnline); };
+  }, [pid]);
+  useEffect(() => { setDriveInfo(i => ({ ...i, pending: books.filter(b => b.driveDirty && b.hasFile).length })); if (books.some(b => b.driveDirty)) scheduleDrive(); }, [books]);
+  // La saga y su número de tomo viajan dentro del EPUB (formato Calibre) para que otros aparatos la reconozcan solos.
+  useEffect(() => {
+    if (!pid || !books.length) return;
+    const want = {};
+    sagas.forEach(sg => sg.items.forEach((it, i) => { want[it.key] = { series: sg.name, seriesIndex: i + 1 }; }));
+    const changes = books.filter(b => b.fingerprint).map(b => {
+      const w = want[b.fingerprint];
+      if (w && (b.series !== w.series || b.seriesIndex !== w.seriesIndex)) return { ...b, series: w.series, seriesIndex: w.seriesIndex, seriesFromApp: true, driveDirty: true };
+      if (!w && b.seriesFromApp && b.series) return { ...b, series: null, seriesIndex: null, seriesFromApp: false, driveDirty: true };
+      return null;
+    }).filter(Boolean);
+    if (changes.length) Promise.all(changes.map(Svc.updateBook)).then(refreshBooks);
+  }, [sagas, books.length]);
   // Un libro vive en una sola saga: al agregarlo a una, sale de las demás.
   const saveSaga = (sg, movedKeys) => {
     const s1 = { ...sg, updatedAt: Date.now() };
@@ -2361,7 +2464,8 @@ function App() {
   } else if (view.name === 'settings') {
     screen = <Settings settings={settings} onChange={setSettings} profile={profile} profiles={profiles} sources={sources} go={go}
       onBack={() => go('library')} onExport={exportBackup} onImportBackup={importBackup} onDeleteProfile={deleteProfile} vocabCount={vocab.length} quotesCount={quotes.length} books={books}
-      syncInfo={syncInfo} onSync={() => runSync('manual')} />;
+      syncInfo={syncInfo} onSync={() => runSync('manual')}
+      driveInfo={driveInfo} onDriveConnect={() => Svc.driveConnect('drive')} onDrivePush={() => { Svc.listBooks(pid).then(l => Promise.all(l.filter(b => b.driveFileId === undefined || b.driveFileId === null).filter(b => b.hasFile).map(b => Svc.updateBook({ ...b, driveDirty: true })))).then(pushDrive); }} />;
   } else if (view.name === 'author') {
     screen = <AuthorView authorKey={view.tab} books={books} onBack={() => go('library')} onOpen={openBook} onBookMenu={b => setSagaSheet({ type: 'folder', book: b })} />;
   } else if (view.name === 'saga' && sagas.find(s => s.id === view.tab)) {
@@ -2411,8 +2515,8 @@ function App() {
         return (
           <CoverSearchSheet key={book.id} book={book} step={q.i + 1} total={q.queue.length} onClose={() => setSagaSheet(null)}
             onSkip={q.queue.length > 1 ? next : null}
-            onPicked={() => { refreshBooks(); toast('Portada guardada.'); next(); }}
-            onRemove={() => Svc.removeWebCover(book).then(() => { refreshBooks(); setSagaSheet(null); toast('Portada quitada.'); })} />
+            onPicked={meta => { Svc.updateBook({ ...meta, driveDirty: true }).then(() => { refreshBooks(); scheduleDrive(); }); toast('Portada guardada.'); next(); }}
+            onRemove={() => Svc.removeWebCover(book).then(m => Svc.updateBook({ ...m, driveDirty: true })).then(() => { refreshBooks(); scheduleDrive(); setSagaSheet(null); toast('Portada quitada.'); })} />
         );
       })()}
       {sagaSheet && sagaSheet.type === 'folder' && (
@@ -2426,7 +2530,7 @@ function App() {
         <AuthorEditSheet book={sagaSheet.book} onClose={() => setSagaSheet(null)}
           books={books} onSave={(name, title) => {
             const b = sagaSheet.book;
-            Svc.updateBook({ ...b, author: name, title }).then(refreshBooks);
+            Svc.updateBook({ ...b, author: name, title, metaAt: Date.now(), driveDirty: true }).then(() => { refreshBooks(); scheduleDrive(); });
             if (title !== b.title) persistSagas(sagas.map(sg => ({ ...sg, items: sg.items.map(it => it.key === b.fingerprint ? { ...it, title } : it) })));
             setSagaSheet(null); toast(name ? 'Movido a ' + authorName(name) + '.' : 'Guardado.');
           }} />

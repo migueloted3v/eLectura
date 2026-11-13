@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.5.0';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -268,11 +268,15 @@ function Stats({ profile, log, books, goalMin, onGoal, onBack }) {
 }
 
 /* ================= Biblioteca ================= */
-function Library({ profile, books, onOpen, onImportClick, go, onBookAction, todaySec, goalMin }) {
+function Library({ profile, books, onOpen, onImportClick, go, onBookAction, todaySec, goalMin, sagas, suggestions, onReviewSagas }) {
   const [filter, setFilter] = useState('todos');
   const [menuFor, setMenuFor] = useState(null);
-  const current = books.find(b => b.hasFile && b.openedAt && !b.finished);
-  const shown = books.filter(b => filter === 'todos' || b.lang === filter);
+  const current = books.slice().sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0)).find(b => b.hasFile && b.openedAt && !b.finished);
+  const inSaga = useMemo(() => { const m = {}; sagas.forEach(s => s.items.forEach(it => { m[it.key] = s; })); return m; }, [sagas]);
+  const byKey = useMemo(() => { const m = {}; books.forEach(b => { if (b.fingerprint) m[b.fingerprint] = b; }); return m; }, [books]);
+  const langOk = b => filter === 'todos' || b.lang === filter;
+  const shown = books.filter(b => !inSaga[b.fingerprint] && langOk(b));
+  const shownSagas = sagas.filter(s => filter === 'todos' || s.items.some(it => byKey[it.key] && langOk(byKey[it.key])));
   return (
     <div className="screen">
       <header className="lib-head">
@@ -310,12 +314,32 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction, toda
             options={[{ id: 'todos', label: 'Todos' }, { id: 'es', label: 'Español' }, { id: 'en', label: 'Inglés' }]} />
         </div>
 
+        {suggestions.length > 0 && (
+          <div className="saga-banner">
+            <IFolder />
+            <span className="grow">Encontré {suggestions.length === 1 ? '1 saga' : suggestions.length + ' sagas'} en tus libros</span>
+            <button type="button" className="btn sm light" onClick={onReviewSagas}>Revisar</button>
+          </div>
+        )}
+
         {books.length === 0 ? (
           <div className="empty">
             <p>Tu biblioteca está vacía. Busca un libro gratuito o abre un EPUB o PDF desde tu celular o tu nube.</p>
           </div>
         ) : (
           <div className="grid3">
+            {shownSagas.map(sg => {
+              const read = sg.items.filter(it => byKey[it.key] && byKey[it.key].finished).length;
+              return (
+                <div key={sg.id} className="book-cell">
+                  <button type="button" className="cover-btn" onClick={() => go('saga', sg.id)} aria-label={'Abrir saga ' + sg.name}>
+                    <SagaCover saga={sg} byKey={byKey} />
+                  </button>
+                  <span className="saga-name">{sg.name}</span>
+                  <span className="muted small">{read} de {sg.items.length} leídos</span>
+                </div>
+              );
+            })}
             {shown.map(b => (
               <div key={b.id} className="book-cell">
                 <button type="button" className="cover-btn" onClick={() => onOpen(b)} aria-label={'Abrir ' + b.title}>
@@ -346,6 +370,7 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction, toda
             <button type="button" className="btn" onClick={() => { onBookAction('finish', menuFor); setMenuFor(null); }}>
               {menuFor.finished ? 'Marcar como no terminado' : 'Marcar como terminado'}
             </button>
+            <button type="button" className="btn" onClick={() => { onBookAction('saga', menuFor); setMenuFor(null); }}>Mover a una saga…</button>
             {menuFor.hasFile && menuFor.format === 'pdf' && <button type="button" className="btn primary" onClick={() => { onBookAction('convert', menuFor); setMenuFor(null); }}>Convertir a EPUB</button>}
             {menuFor.hasFile && menuFor.format === 'epub' && <button type="button" className="btn" onClick={() => { onBookAction('download', menuFor); setMenuFor(null); }}>Descargar EPUB</button>}
             {menuFor.hasFile && <button type="button" className="btn" onClick={() => { onBookAction('free', menuFor); setMenuFor(null); }}>Quitar del cel (conserva el progreso)</button>}
@@ -354,6 +379,215 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction, toda
         </Sheet>
       )}
     </div>
+  );
+}
+
+/* ================= Sagas ================= */
+const IFolder = () => <Icon><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></Icon>;
+const IGrip = () => <Icon size={20} sw={2}><path d="M5 8h14M5 12h14M5 16h14" /></Icon>;
+// Portada de la saga: la elegida, o la del primer libro (en orden) que tenga imagen, o la del primero.
+function sagaFront(saga, byKey) {
+  const local = saga.items.map(it => byKey[it.key]).filter(Boolean);
+  const chosen = saga.coverKey && byKey[saga.coverKey];
+  return chosen || local.find(b => b.hasCover) || local[0] || null;
+}
+function SagaCover({ saga, byKey, height = 146 }) {
+  const front = sagaFront(saga, byKey);
+  const t = i => (saga.items[i] && saga.items[i].title) || saga.name;
+  return (
+    <span className="saga-stack" style={{ height }}>
+      <span className="saga-sheet s2" style={{ background: hashColor(t(2) + '2') }} />
+      <span className="saga-sheet s1" style={{ background: hashColor(t(1) + '1') }} />
+      <span className="saga-front">
+        {front ? <Cover book={front} height={height - 8} /> : <span className="cover cover-text" style={{ height: height - 8, background: hashColor(saga.name) }}><span>{saga.name}</span></span>}
+      </span>
+      <span className="saga-count">{saga.items.length}</span>
+    </span>
+  );
+}
+
+function SagaSuggestSheet({ suggestions, onCreate, onIgnore, onClose }) {
+  return (
+    <Sheet label="Sagas encontradas" onClose={onClose}>
+      <div className="sheet-title">Sagas encontradas</div>
+      <p className="muted small">Según los datos de tus EPUB. Al crearla puedes cambiar el orden arrastrando.</p>
+      {suggestions.length === 0 && <p className="muted">Ya no hay sagas por revisar.</p>}
+      {suggestions.map(sg => (
+        <div key={sg.name} className="card pad stack-sm">
+          <div className="row-between"><span className="serif strong big">{sg.name}</span><span className="muted tiny">{sg.books.length} libros</span></div>
+          <span className="small">{sg.books.map((b, i) => (b.seriesIndex || i + 1) + '. ' + b.title).join('  ·  ')}</span>
+          <div className="row-gap">
+            <button type="button" className="btn sm primary grow" onClick={() => onCreate(sg)}>Crear carpeta</button>
+            <button type="button" className="btn sm" onClick={() => onIgnore(sg)}>Ignorar</button>
+          </div>
+        </div>
+      ))}
+      <button type="button" className="btn" onClick={onClose}>Listo</button>
+    </Sheet>
+  );
+}
+
+function SagaPickSheet({ book, sagas, current, onPick, onCreate, onRemove, onClose }) {
+  const [name, setName] = useState(book && book.series ? book.series : '');
+  return (
+    <Sheet label="Mover a una saga" onClose={onClose}>
+      <div className="sheet-title">Mover a una saga</div>
+      <p className="muted small ellipsis">{book.title}</p>
+      {sagas.length > 0 && (
+        <div className="card list">
+          {sagas.map(sg => (
+            <button key={sg.id} type="button" className="row row-btn" onClick={() => onPick(sg)} disabled={current && current.id === sg.id}>
+              <IFolder /><span className="grow left">{sg.name}</span><span className="muted small">{current && current.id === sg.id ? 'Aquí está' : sg.items.length + ' libros'}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <label htmlFor="newsaga" className="field-label">Nueva saga</label>
+      <div className="row-gap">
+        <input id="newsaga" className="input grow" value={name} maxLength={60} placeholder="Nombre de la saga" onChange={e => setName(e.target.value)} />
+        <button type="button" className="btn primary" disabled={!name.trim()} onClick={() => onCreate(name.trim())}>Crear</button>
+      </div>
+      {current && <button type="button" className="btn" onClick={onRemove}>Sacar de “{current.name}”</button>}
+    </Sheet>
+  );
+}
+
+function SagaView({ saga, books, onBack, onOpen, onChange, onUndo, onMissing }) {
+  const byKey = useMemo(() => { const m = {}; books.forEach(b => { if (b.fingerprint) m[b.fingerprint] = b; }); return m; }, [books]);
+  const [items, setItems] = useState(saga.items);
+  const [drag, setDrag] = useState(null);
+  const [sheet, setSheet] = useState(null);
+  const [newName, setNewName] = useState(saga.name);
+  const [picked, setPicked] = useState({});
+  const listRef = useRef(null);
+  useEffect(() => { if (drag == null) setItems(saga.items); }, [saga]);
+  const read = items.filter(it => byKey[it.key] && byKey[it.key].finished).length;
+  const pct = it => { const b = byKey[it.key]; return b ? (b.finished ? 1 : (b.progress && b.progress.percent) || 0) : 0; };
+  const status = it => {
+    const b = byKey[it.key];
+    if (!b) return 'No está en este aparato';
+    if (b.finished) return 'Terminado';
+    const p = pct(it);
+    return (p > 0 ? Math.round(p * 100) + ' %' : 'Sin empezar') + (b.hasFile ? '' : ' · en tu nube');
+  };
+  // Arrastrar con la manija: el libro sigue al dedo y la lista se reacomoda.
+  const down = (e, i) => { e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) {} setDrag(i); };
+  const move = e => {
+    if (drag == null || !listRef.current) return;
+    const rows = Array.from(listRef.current.querySelectorAll('.saga-row'));
+    let target = rows.length - 1;
+    for (let i = 0; i < rows.length; i++) { const r = rows[i].getBoundingClientRect(); if (e.clientY < r.top + r.height / 2) { target = i; break; } }
+    if (target !== drag) {
+      setItems(prev => { const a = prev.slice(); const [it] = a.splice(drag, 1); a.splice(target, 0, it); return a; });
+      setDrag(target);
+    }
+  };
+  const up = () => { if (drag == null) return; setDrag(null); onChange({ ...saga, items }); };
+  const loose = books.filter(b => b.fingerprint && !items.some(it => it.key === b.fingerprint));
+  return (
+    <div className="screen">
+      <TopBar title="" onBack={onBack} right={<button type="button" className="icon-btn" aria-label="Opciones de la saga" onClick={() => setSheet('menu')}><IMore /></button>} />
+      <div className="content">
+        <div className="row-inline saga-head">
+          <SagaCover saga={{ ...saga, items }} byKey={byKey} height={118} />
+          <div className="stack-sm grow">
+            <span className="serif strong saga-title">{saga.name}</span>
+            <span className="muted small">{items.length} {items.length === 1 ? 'libro' : 'libros'} · {read} de {items.length} leídos</span>
+            <span className="bar"><span style={{ width: (items.length ? Math.round(read / items.length * 100) : 0) + '%' }} /></span>
+          </div>
+        </div>
+        <p className="muted small">Orden de lectura · mantén presionado ≡ y arrastra para cambiarlo</p>
+        <div className="stack-sm" ref={listRef} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+          {items.map((it, i) => {
+            const b = byKey[it.key];
+            return (
+              <div key={it.key} className={'saga-row card' + (drag === i ? ' lifted' : '')}>
+                <span className="saga-n">{i + 1}</span>
+                <button type="button" className="saga-open" onClick={() => (b ? onOpen(b) : onMissing(it))}>
+                  {b ? <Cover book={b} height={56} /> : <span className="cover cover-text" style={{ height: 56, background: hashColor(it.title) }} />}
+                  <span className="stack-xs grow left">
+                    <span className="serif strong">{b ? b.title : it.title}</span>
+                    <span className="muted tiny">{status(it)}</span>
+                    <span className="bar thin"><span style={{ width: Math.round(pct(it) * 100) + '%' }} /></span>
+                  </span>
+                </button>
+                <span className="saga-handle" role="button" tabIndex={0} aria-label={'Arrastrar ' + it.title} onPointerDown={e => down(e, i)}
+                  onKeyDown={e => {
+                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                    e.preventDefault();
+                    const t = e.key === 'ArrowUp' ? i - 1 : i + 1;
+                    if (t < 0 || t >= items.length) return;
+                    const a = items.slice(); const [x] = a.splice(i, 1); a.splice(t, 0, x); setItems(a); onChange({ ...saga, items: a });
+                  }}><IGrip /></span>
+              </div>
+            );
+          })}
+        </div>
+        <button type="button" className="btn dashed" onClick={() => { setPicked({}); setSheet('add'); }}>+ Agregar libros a esta saga</button>
+      </div>
+
+      {sheet === 'menu' && (
+        <Sheet label="Opciones de la saga" onClose={() => setSheet(null)}>
+          <div className="sheet-title">{saga.name}</div>
+          <button type="button" className="btn" onClick={() => { setNewName(saga.name); setSheet('rename'); }}>Renombrar</button>
+          <button type="button" className="btn" onClick={() => setSheet('cover')}>Elegir portada</button>
+          <button type="button" className="btn danger" onClick={() => { if (confirm('¿Deshacer la saga "' + saga.name + '"? Los libros vuelven a la biblioteca; no se borra nada.')) onUndo(saga); }}>Deshacer saga</button>
+        </Sheet>
+      )}
+      {sheet === 'rename' && (
+        <Sheet label="Renombrar saga" onClose={() => setSheet(null)}>
+          <div className="sheet-title">Renombrar</div>
+          <input className="input" value={newName} maxLength={60} onChange={e => setNewName(e.target.value)} aria-label="Nombre de la saga" />
+          <button type="button" className="btn primary" disabled={!newName.trim()} onClick={() => { onChange({ ...saga, items, name: newName.trim() }); setSheet(null); }}>Guardar</button>
+        </Sheet>
+      )}
+      {sheet === 'cover' && (
+        <Sheet label="Elegir portada" onClose={() => setSheet(null)}>
+          <div className="sheet-title">Elegir portada</div>
+          <div className="grid3">
+            {items.map(it => byKey[it.key]).filter(Boolean).map(b => (
+              <button key={b.id} type="button" className={'cover-btn pick' + (saga.coverKey === b.fingerprint ? ' on' : '')} onClick={() => { onChange({ ...saga, items, coverKey: b.fingerprint }); setSheet(null); }}>
+                <Cover book={b} height={120} />
+              </button>
+            ))}
+          </div>
+          <button type="button" className="btn" onClick={() => { onChange({ ...saga, items, coverKey: null }); setSheet(null); }}>Automática (primer libro con imagen)</button>
+        </Sheet>
+      )}
+      {sheet === 'add' && (
+        <Sheet label="Agregar libros" onClose={() => setSheet(null)}>
+          <div className="sheet-title">Agregar a {saga.name}</div>
+          {loose.length === 0 ? <p className="muted">No hay más libros en tu biblioteca.</p> : (
+            <div className="card list">
+              {loose.map(b => (
+                <label key={b.id} className="row check-row">
+                  <input type="checkbox" checked={!!picked[b.id]} onChange={e => setPicked(p => ({ ...p, [b.id]: e.target.checked }))} />
+                  <span className="grow ellipsis">{b.title}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <button type="button" className="btn primary" disabled={!Object.values(picked).some(Boolean)} onClick={() => {
+            const add = loose.filter(b => picked[b.id]).map(b => ({ key: b.fingerprint, title: b.title }));
+            onChange({ ...saga, items: [...items, ...add] }, add.map(a => a.key)); setSheet(null);
+          }}>Agregar</button>
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
+function NextInSagaSheet({ info, onOpen, onClose }) {
+  return (
+    <Sheet label="Siguiente libro de la saga" onClose={onClose}>
+      <div className="sheet-title">¡Terminaste el libro {info.pos}!</div>
+      <div className="row-inline">
+        {info.book ? <Cover book={info.book} height={68} /> : <span className="cover cover-text" style={{ height: 68, width: 48, background: hashColor(info.item.title) }} />}
+        <span className="stack-xs"><span className="muted tiny">Sigue en {info.saga.name} · libro {info.pos + 1}</span><span className="serif strong big">{info.book ? info.book.title : info.item.title}</span></span>
+      </div>
+      <button type="button" className="btn primary" onClick={onOpen}>{info.book && info.book.hasFile ? 'Empezar el libro ' + (info.pos + 1) : 'Buscarlo en Mi nube'}</button>
+      <button type="button" className="btn" onClick={onClose}>Ahora no</button>
+    </Sheet>
   );
 }
 
@@ -720,7 +954,9 @@ function EpubView({ book, blob, settings, eff, onProgress, onLocations, onToggle
       showPageRef.current = () => { const l = rendition.currentLocation(); if (l && l.start) showPage(l.start.cfi); };
       rendition.on('relocated', loc => {
         const cfi = loc.start.cfi;
-        const pct = showPage(cfi);
+        // En la última pantalla del libro cuenta como terminado aunque aún no estén listas las páginas.
+        const pct = loc.atEnd ? 1 : showPage(cfi);
+        if (loc.atEnd) showPage(cfi);
         // Mientras la página se acomoda al abrir, no se sobrescribe la posición guardada.
         if (stable.current) cb.current.onProgress({ cfi, percent: pct });
         const chapter = loc.start.href ? (epub.navigation && epub.navigation.get(loc.start.href)) : null;
@@ -1534,12 +1770,16 @@ function App() {
   const [books, setBooks] = useState([]);
   const [vocab, setVocab] = useState([]);
   const [quotes, setQuotes] = useState([]);
+  const [sagas, setSagas] = useState([]);
+  const [sagaDismissed, setSagaDismissed] = useState({});
+  const [sagaSheet, setSagaSheet] = useState(null);
+  const [nextInfo, setNextInfo] = useState(null);
   const [readingLog, setReadingLog] = useState({});
   const pendingSync = useRef(null);
   const [othersLog, setOthersLog] = useState({});
   const [syncInfo, setSyncInfo] = useState({ at: 0, devices: [], status: '' });
   const mergedLog = useMemo(() => Sync.sumLogs([readingLog, ...Object.values(othersLog).map(d => d.reading || {})]), [readingLog, othersLog]);
-  const tombs = useRef({ quotes: {}, vocab: {} });
+  const tombs = useRef({ quotes: {}, vocab: {}, sagas: {} });
   const [startCfi, setStartCfi] = useState(null);
   const [customSources, setCustomSources] = useState([]);
   const [view, setView] = useState({ name: 'library' });
@@ -1592,10 +1832,12 @@ function App() {
     Svc.kv.get('settings:' + pid, null).then(s => setSettingsState({ ...DEFAULT_SETTINGS, ...(s || {}), schedule: { ...DEFAULT_SETTINGS.schedule, ...((s && s.schedule) || {}) } }));
     Svc.kv.get('vocab:' + pid, []).then(setVocab);
     Svc.kv.get('quotes:' + pid, []).then(setQuotes);
+    Svc.kv.get('sagas:' + pid, []).then(setSagas);
+    Svc.kv.get('sagas-dismissed:' + pid, {}).then(setSagaDismissed);
     Svc.kv.get('reading:' + pid, {}).then(setReadingLog);
     Svc.kv.get('reading-others:' + pid, {}).then(setOthersLog);
     Svc.kv.get('sync-meta:' + pid, { at: 0, devices: [] }).then(m => setSyncInfo({ ...m, status: '' }));
-    Svc.kv.get('tombs:' + pid, { quotes: {}, vocab: {} }).then(t => { tombs.current = t; });
+    Svc.kv.get('tombs:' + pid, { quotes: {}, vocab: {}, sagas: {} }).then(t => { tombs.current = { sagas: {}, ...t }; });
     Svc.kv.get('sources:' + pid, []).then(setCustomSources);
     refreshBooks();
   }, [pid]);
@@ -1670,6 +1912,14 @@ function App() {
   };
   const exitReader = meta => {
     setTimeout(() => runSync('auto'), 1500);
+    if (meta.finished && readerBook && !readerBook.finished) {
+      const sg = sagaOf(meta);
+      if (sg) {
+        const pos = sg.items.findIndex(it => it.key === meta.fingerprint);
+        const item = sg.items[pos + 1];
+        if (item) setNextInfo({ saga: sg, pos: pos + 1, item, book: books.find(x => x.fingerprint === item.key) || null });
+      }
+    }
     Svc.updateBook(meta).then(() => {
       if (meta.finished && settings.freeFinished && meta.hasFile) {
         return Svc.freeBook(meta).then(() => toast('Terminaste "' + meta.title + '". Quité el archivo del cel; tu progreso y vocabulario se quedan.'));
@@ -1679,6 +1929,7 @@ function App() {
   };
   const bookAction = (action, b) => {
     const done = () => refreshBooks();
+    if (action === 'saga') { setSagaSheet({ type: 'pick', book: b }); return; }
     if (action === 'finish') Svc.updateBook({ ...b, finished: !b.finished, finishedAt: !b.finished ? Date.now() : null }).then(done);
     if (action === 'free') Svc.freeBook(b).then(() => { toast('Quitado del cel. Bájalo de tu nube cuando quieras seguir.'); done(); });
     if (action === 'delete') Svc.deleteBook(b).then(() => {
@@ -1732,7 +1983,7 @@ function App() {
   /* ---------- Sincronizar entre aparatos (Google Drive, carpeta oculta de la app) ---------- */
   const syncBusy = useRef(false);
   const latest = useRef({});
-  latest.current = { readingLog, settings, quotes, vocab, books, profile, readerBook };
+  latest.current = { readingLog, settings, quotes, vocab, books, profile, readerBook, sagas };
   const runSync = useCallback(reason => {
     const L = latest.current;
     if (!pid || !L.profile || syncBusy.current) return Promise.resolve();
@@ -1760,7 +2011,8 @@ function App() {
     const local = {
       deviceId: Sync.deviceId(), deviceName: Sync.deviceName(), profile: L.profile.name,
       reading: L.readingLog, settings: { value: settingsValue, ts: _ts || {} },
-      quotes: L.quotes, quotesDeleted: tombs.current.quotes, vocab: L.vocab, vocabDeleted: tombs.current.vocab, progress
+      quotes: L.quotes, quotesDeleted: tombs.current.quotes, vocab: L.vocab, vocabDeleted: tombs.current.vocab, progress,
+      sagas: L.sagas, sagasDeleted: tombs.current.sagas || {}
     };
     return Svc.syncLoad(L.profile.name).then(({ id, doc }) => {
       const m = Sync.merge(local, doc);
@@ -1777,7 +2029,8 @@ function App() {
       const qs = a.quotes.map(q => (q.bookKey && byKey[q.bookKey] ? { ...q, bookId: byKey[q.bookKey] } : q));
       setQuotes(qs); Svc.kv.set('quotes:' + pid, qs);
       setVocab(a.vocab); Svc.kv.set('vocab:' + pid, a.vocab);
-      tombs.current = { quotes: a.quotesDeleted, vocab: a.vocabDeleted }; Svc.kv.set('tombs:' + pid, tombs.current);
+      setSagas(a.sagas); Svc.kv.set('sagas:' + pid, a.sagas);
+      tombs.current = { quotes: a.quotesDeleted, vocab: a.vocabDeleted, sagas: a.sagasDeleted }; Svc.kv.set('tombs:' + pid, tombs.current);
       const openId = L.readerBook && L.readerBook.id;
       const updates = L.books.filter(b => b.fingerprint && a.progress[b.fingerprint] && b.id !== openId && (a.progress[b.fingerprint].at || 0) > (b.openedAt || 0))
         .map(b => {
@@ -1805,6 +2058,49 @@ function App() {
     document.addEventListener('visibilitychange', onVis);
     return () => { clearTimeout(t0); clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
   }, [pid, !!profile]);
+
+  /* ---------- Sagas ---------- */
+  const persistSagas = next => { setSagas(next); Svc.kv.set('sagas:' + pid, next); };
+  // Un libro vive en una sola saga: al agregarlo a una, sale de las demás.
+  const saveSaga = (sg, movedKeys) => {
+    const s1 = { ...sg, updatedAt: Date.now() };
+    const keys = movedKeys || [];
+    const others = sagas.filter(x => x.id !== sg.id).map(x => keys.some(k => x.items.some(it => it.key === k))
+      ? { ...x, items: x.items.filter(it => !keys.includes(it.key)), updatedAt: Date.now() } : x);
+    const exists = sagas.some(x => x.id === sg.id);
+    persistSagas(exists ? sagas.map(x => x.id === sg.id ? s1 : others.find(o => o.id === x.id)) : [s1, ...others]);
+  };
+  const undoSaga = sg => { tomb('sagas', sg.id); persistSagas(sagas.filter(x => x.id !== sg.id)); go('library'); toast('Saga deshecha. Los libros volvieron a tu biblioteca.'); };
+  const sagaOf = b => sagas.find(s => s.items.some(it => it.key === b.fingerprint));
+  const sortSeries = list => list.slice().sort((a, b) => (a.seriesIndex || 999) - (b.seriesIndex || 999) || a.title.localeCompare(b.title));
+  const suggestions = useMemo(() => {
+    const used = {}; sagas.forEach(s => s.items.forEach(it => { used[it.key] = 1; }));
+    const groups = {};
+    books.forEach(b => {
+      if (!b.series || !b.fingerprint || used[b.fingerprint]) return;
+      const k = b.series.trim().toLowerCase();
+      if (sagaDismissed[k]) return;
+      (groups[k] = groups[k] || { key: k, name: b.series.trim(), books: [] }).books.push(b);
+    });
+    return Object.values(groups).filter(g => g.books.length >= 2).map(g => ({ ...g, books: sortSeries(g.books) }));
+  }, [books, sagas, sagaDismissed]);
+  const createSagaFrom = (name, list) => {
+    const existing = sagas.find(s => s.name.toLowerCase() === name.toLowerCase());
+    const items = list.map(b => ({ key: b.fingerprint, title: b.title }));
+    if (existing) saveSaga({ ...existing, items: [...existing.items.filter(it => !items.some(n => n.key === it.key)), ...items] }, items.map(i => i.key));
+    else saveSaga({ id: Svc.uid(), name, items, coverKey: null }, items.map(i => i.key));
+  };
+  const dismissSuggestion = sg => { const next = { ...sagaDismissed, [sg.key]: Date.now() }; setSagaDismissed(next); Svc.kv.set('sagas-dismissed:' + pid, next); };
+  // EPUB guardados antes de esta versión: buscar su saga una sola vez, en segundo plano.
+  const scanning = useRef(false);
+  useEffect(() => {
+    if (scanning.current || !pid) return;
+    const pending = books.filter(b => b.format === 'epub' && b.hasFile && !b.seriesScanned);
+    if (!pending.length) return;
+    scanning.current = true;
+    pending.reduce((p, b) => p.then(() => Svc.scanSeries(b).catch(() => null)), Promise.resolve())
+      .then(() => refreshBooks()).finally(() => { scanning.current = false; });
+  }, [books, pid]);
 
   const addSource = s => { const next = [...customSources, s]; setCustomSources(next); Svc.kv.set('sources:' + pid, next); toast('Fuente agregada: ' + s.name); };
   const removeSource = id => { const next = customSources.filter(s => s.id !== id); setCustomSources(next); Svc.kv.set('sources:' + pid, next); };
@@ -1838,6 +2134,9 @@ function App() {
     screen = <Settings settings={settings} onChange={setSettings} profile={profile} profiles={profiles} sources={sources} go={go}
       onBack={() => go('library')} onExport={exportBackup} onImportBackup={importBackup} onDeleteProfile={deleteProfile} vocabCount={vocab.length} quotesCount={quotes.length} books={books}
       syncInfo={syncInfo} onSync={() => runSync('manual')} />;
+  } else if (view.name === 'saga' && sagas.find(s => s.id === view.tab)) {
+    screen = <SagaView key={view.tab} saga={sagas.find(s => s.id === view.tab)} books={books} onBack={() => go('library')} onOpen={openBook}
+      onChange={saveSaga} onUndo={undoSaga} onMissing={() => { toast('Ese libro no está en este aparato. Búscalo en Mi nube o en tus fuentes.'); go('discover', 'cloud'); }} />;
   } else if (view.name === 'stats') {
     screen = <Stats profile={profile} log={mergedLog} books={books} goalMin={settings.goalMin || 10} onGoal={m => { setSettings({ ...settings, goalMin: m }); setReadingLog(prev => { const next = Reading.setGoal(prev, new Date(), m * 60); Svc.kv.set('reading:' + pid, next); return next; }); }} onBack={() => go('library')} />;
   } else if (view.name === 'quotes') {
@@ -1846,7 +2145,8 @@ function App() {
     screen = <Vocab words={vocab} onDelete={deleteWord} onBack={() => go('settings')} />;
   } else {
     screen = <Library profile={profile} books={books} onOpen={openBook} onImportClick={() => fileRef.current.click()} go={go} onBookAction={bookAction}
-      todaySec={Reading.secOf(mergedLog, new Date())} goalMin={settings.goalMin || 10} />;
+      todaySec={Reading.secOf(mergedLog, new Date())} goalMin={settings.goalMin || 10}
+      sagas={sagas} suggestions={suggestions} onReviewSagas={() => setSagaSheet({ type: 'suggest' })} />;
   }
 
   return (
@@ -1864,6 +2164,20 @@ function App() {
         <ConvertSheet key={convertQueue[0].id} job={convertQueue[0]} toast={toast}
           onSaveEpub={saveConverted} onKeepOriginal={keepOriginal} onDeleteOriginal={deleteOriginal}
           onRead={meta => meta && openBook(meta)} onFinish={nextConvert} />
+      )}
+      {sagaSheet && sagaSheet.type === 'suggest' && (
+        <SagaSuggestSheet suggestions={suggestions} onClose={() => setSagaSheet(null)}
+          onCreate={sg => { createSagaFrom(sg.name, sg.books); toast('Saga creada: ' + sg.name); }} onIgnore={dismissSuggestion} />
+      )}
+      {sagaSheet && sagaSheet.type === 'pick' && (
+        <SagaPickSheet book={sagaSheet.book} sagas={sagas} current={sagaOf(sagaSheet.book)} onClose={() => setSagaSheet(null)}
+          onPick={sg => { saveSaga({ ...sg, items: [...sg.items, { key: sagaSheet.book.fingerprint, title: sagaSheet.book.title }] }, [sagaSheet.book.fingerprint]); setSagaSheet(null); toast('Movido a ' + sg.name); }}
+          onCreate={name => { createSagaFrom(name, [sagaSheet.book]); setSagaSheet(null); toast('Saga creada: ' + name); }}
+          onRemove={() => { const sg = sagaOf(sagaSheet.book); saveSaga({ ...sg, items: sg.items.filter(it => it.key !== sagaSheet.book.fingerprint) }); setSagaSheet(null); }} />
+      )}
+      {nextInfo && view.name !== 'reader' && (
+        <NextInSagaSheet info={nextInfo} onClose={() => setNextInfo(null)}
+          onOpen={() => { const n = nextInfo; setNextInfo(null); if (n.book && n.book.hasFile) openBook(n.book); else go('discover', 'cloud'); }} />
       )}
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
       <div className="overlay-warm" style={{ background: 'rgba(255,146,54,' + (eff.warm / 100 * 0.24).toFixed(3) + ')' }} />

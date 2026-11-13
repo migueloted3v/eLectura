@@ -67,7 +67,7 @@
      remote: documento de Drive o null. Devuelve { doc, apply }. */
   function merge(local, remote, now) {
     now = now || Date.now();
-    remote = remote && remote.v === 1 ? remote : { v: 1, devices: {}, progress: {}, quotes: {}, vocab: {} };
+    remote = remote && remote.v === 1 ? remote : { v: 1, devices: {}, progress: {}, quotes: {}, vocab: {}, sagas: {} };
     var devices = Object.assign({}, remote.devices || {});
     devices[local.deviceId] = { name: local.deviceName, reading: local.reading || {}, at: now };
 
@@ -90,8 +90,9 @@
 
     var q = mergeItems(local.quotes, local.quotesDeleted, remote.quotes);
     var w = mergeItems(local.vocab, local.vocabDeleted, remote.vocab);
+    var sg = mergeItems(local.sagas, local.sagasDeleted, remote.sagas);
 
-    var doc = { v: 1, profile: local.profile, updatedAt: now, devices: devices, settings: settings, progress: progress, quotes: q.map, vocab: w.map };
+    var doc = { v: 1, profile: local.profile, updatedAt: now, devices: devices, settings: settings, progress: progress, quotes: q.map, vocab: w.map, sagas: sg.map };
     var others = {};
     Object.keys(devices).forEach(function (id) { if (id !== local.deviceId) others[id] = devices[id]; });
     return {
@@ -101,7 +102,8 @@
         settings: changed ? settings : null,
         progress: progress,
         quotes: q.items, quotesDeleted: q.deleted,
-        vocab: w.items, vocabDeleted: w.deleted
+        vocab: w.items, vocabDeleted: w.deleted,
+        sagas: sg.items, sagasDeleted: sg.deleted
       }
     };
   }

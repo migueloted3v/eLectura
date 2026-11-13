@@ -61,6 +61,48 @@
   }
 
   /* ---------- Lectura de metadatos ---------- */
+  // Saga y número de tomo dentro del EPUB (Calibre: calibre:series; EPUB 3: belongs-to-collection).
+  function readSeries(buf) {
+    if (!window.JSZip) return Promise.resolve({});
+    return JSZip.loadAsync(buf).then(function (zip) {
+      var c = zip.file('META-INF/container.xml');
+      if (!c) return {};
+      return c.async('string').then(function (xml) {
+        var m = xml.match(/full-path\s*=\s*["']([^"']+)["']/);
+        var f = m && zip.file(decodeURIComponent(m[1]));
+        return f ? f.async('string') : '';
+      }).then(function (opf) {
+        if (!opf) return {};
+        var doc = new DOMParser().parseFromString(opf, 'application/xml');
+        var metas = Array.prototype.slice.call(doc.getElementsByTagName('meta'));
+        var attr = function (el, n) { return el.getAttribute(n) || ''; };
+        var cal = metas.filter(function (x) { return attr(x, 'name') === 'calibre:series'; })[0];
+        if (cal && attr(cal, 'content').trim()) {
+          var idx = metas.filter(function (x) { return attr(x, 'name') === 'calibre:series_index'; })[0];
+          return { series: attr(cal, 'content').trim(), seriesIndex: idx ? parseFloat(attr(idx, 'content')) || null : null };
+        }
+        var coll = metas.filter(function (x) { return attr(x, 'property') === 'belongs-to-collection'; });
+        for (var i = 0; i < coll.length; i++) {
+          var id = attr(coll[i], 'id'), ref = function (p) { return metas.filter(function (x) { return attr(x, 'refines') === '#' + id && attr(x, 'property') === p; })[0]; };
+          var type = id ? ref('collection-type') : null;
+          if (type && type.textContent.trim() !== 'series') continue;
+          var pos = id ? ref('group-position') : null;
+          var name = coll[i].textContent.trim();
+          if (name) return { series: name, seriesIndex: pos ? parseFloat(pos.textContent) || null : null };
+        }
+        return {};
+      });
+    }).catch(function () { return {}; });
+  }
+  function scanSeries(meta) {
+    return getFile(meta.id).then(function (blob) {
+      if (!blob) return null;
+      return blob.arrayBuffer().then(readSeries).then(function (sr) {
+        var next = Object.assign({}, meta, { series: sr.series || null, seriesIndex: sr.seriesIndex || null, seriesScanned: true });
+        return db.put('books', next).then(function () { return next; });
+      });
+    });
+  }
   function readEpubMeta(buf) {
     var book = window.ePub(buf);
     return withTimeout(book.loaded.metadata, 15000).then(function (m) {
@@ -101,7 +143,9 @@
     if (!format) return Promise.reject(new Error('Solo se pueden guardar archivos EPUB o PDF.'));
     var fingerprint = fingerprintOf(fileName, blob.size);
     return blob.arrayBuffer().then(function (buf) {
-      var metaP = format === 'epub' ? readEpubMeta(buf) : readPdfMeta(buf);
+      var metaP = format === 'epub'
+        ? Promise.all([readEpubMeta(buf).catch(function () { return {}; }), readSeries(buf.slice(0))]).then(function (r) { return Object.assign({}, r[0], r[1], { seriesScanned: true }); })
+        : readPdfMeta(buf);
       return metaP.catch(function () { return {}; }).then(function (m) {
         return listBooks(profileId).then(function (books) {
           var existing = books.filter(function (b) { return b.fingerprint === fingerprint; })[0];
@@ -114,7 +158,10 @@
             size: blob.size, pages: m.pages || (existing && existing.pages) || null,
             hasFile: true, addedAt: existing ? existing.addedAt : Date.now(),
             source: hint.source || (existing && existing.source) || 'archivo',
-            hasCover: !!m.cover
+            hasCover: !!m.cover,
+            series: m.series || (existing && existing.series) || null,
+            seriesIndex: m.seriesIndex || (existing && existing.seriesIndex) || null,
+            seriesScanned: !!m.seriesScanned || !!(existing && existing.seriesScanned)
           });
           var writes = [db.put('files', blob, id), db.put('books', meta)];
           if (m.cover) writes.push(db.put('files', m.cover, 'cover:' + id));
@@ -389,7 +436,7 @@
 
   window.Svc = {
     kv: kv, fingerprintOf: fingerprintOf, cleanName: cleanName, uid: uid, mb: mb, formatOf: formatOf, langCode: langCode,
-    listBooks: listBooks, saveBookFromBlob: saveBookFromBlob, updateBook: updateBook,
+    listBooks: listBooks, saveBookFromBlob: saveBookFromBlob, updateBook: updateBook, readSeries: readSeries, scanSeries: scanSeries,
     getFile: getFile, getCover: getCover, freeBook: freeBook, deleteBook: deleteBook,
     storageInfo: storageInfo, requestPersist: requestPersist, downloadBlob: downloadBlob,
     DEFAULT_SOURCES: DEFAULT_SOURCES, searchGutenberg: searchGutenberg, searchOpenLibrary: searchOpenLibrary, searchOpds: searchOpds,

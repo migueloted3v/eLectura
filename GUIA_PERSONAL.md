@@ -130,6 +130,12 @@ Hazlas en al menos un iPhone y un Android.
 | 42 | Cambiar la meta en la tablet | El cel toma la nueva meta |
 | 43 | Leer sin internet en ambos y luego conectar | Se suman los minutos de los dos, sin duplicar |
 | 44 | En el iPhone: Buscar libros | "Mi nube" se ve primero, sin deslizar |
+| 45 | Tener 2 o más libros de una misma saga | Aparece "Encontré N sagas" → Revisar → Crear carpeta |
+| 46 | Abrir la carpeta y arrastrar un libro con ≡ | Cambia el orden y se conserva al cerrar la app |
+| 47 | Menú ⋯ de un libro → Mover a una saga → nueva | Se crea la carpeta con ese libro |
+| 48 | Terminar un libro de la saga | Ofrece "Empezar el libro N" |
+| 49 | Carpeta → ⋯ → Elegir portada | La pila muestra esa portada |
+| 50 | Carpeta → ⋯ → Deshacer saga | Los libros vuelven sueltos, sin borrarse |
 
 Anota lo que falle con el número de prueba y el modelo de celular.
 

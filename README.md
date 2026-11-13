@@ -34,6 +34,14 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 - Guarda palabras en Mi vocabulario junto con la frase donde aparecieron.
 - Solo las consultas usan internet; la lectura no.
 
+**Sagas (carpetas)**
+- Agrupa los libros de una saga en una carpeta. En la biblioteca se ve como una pila con la portada del primer libro que tenga imagen (o la que elijas) y cuántos llevas leídos.
+- Dentro de la carpeta, los libros van numerados en orden de lectura; mantén presionada la manija ≡ y arrastra para cambiar el orden.
+- Detecta sagas en los datos del EPUB (Calibre `calibre:series` y EPUB 3 `belongs-to-collection`) y sugiere las carpetas ya ordenadas por tomo; tú confirmas o ignoras.
+- Menú ⋯ del libro → Mover a una saga; menú de la carpeta → Renombrar, Elegir portada, Deshacer saga (los libros vuelven sueltos).
+- Al terminar un libro de una saga, ofrece abrir el siguiente (o buscarlo en Mi nube si no está en el aparato).
+- Las sagas se sincronizan entre aparatos.
+
 **Medidor de lectura**
 - Cuenta solo la lectura activa: el tiempo corre con el libro en pantalla y se pausa si pasan 2 minutos sin cambiar de página o tocar la pantalla.
 - Meta diaria por perfil (5, 10, 15, 20 o 30 min) con anillo de avance y aviso al cumplirla. En la biblioteca, el chip "Hoy X de Y min" abre Mi lectura.

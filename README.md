@@ -42,6 +42,11 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 - Al terminar un libro de una saga, ofrece abrir el siguiente (o buscarlo en Mi nube si no está en el aparato).
 - Las sagas se sincronizan entre aparatos.
 
+**Ver por autor**
+- Selector Sagas | Autores en la biblioteca (recuerda el último usado).
+- Autores en orden alfabético por apellido, cada uno como pila con sus libros y cuántos llevas leídos; incluye los libros que están dentro de sagas.
+- Junta variantes del mismo nombre ("Gibson, William" = "William Gibson"); menú ⋯ del libro → Editar autor para corregir o completar.
+
 **Medidor de lectura**
 - Cuenta solo la lectura activa: el tiempo corre con el libro en pantalla y se pausa si pasan 2 minutos sin cambiar de página o tocar la pantalla.
 - Meta diaria por perfil (5, 10, 15, 20 o 30 min) con anillo de avance y aviso al cumplirla. En la biblioteca, el chip "Hoy X de Y min" abre Mi lectura.

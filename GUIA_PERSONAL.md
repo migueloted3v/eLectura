@@ -136,6 +136,9 @@ Hazlas en al menos un iPhone y un Android.
 | 48 | Terminar un libro de la saga | Ofrece "Empezar el libro N" |
 | 49 | Carpeta → ⋯ → Elegir portada | La pila muestra esa portada |
 | 50 | Carpeta → ⋯ → Deshacer saga | Los libros vuelven sueltos, sin borrarse |
+| 51 | Biblioteca → Autores | Autores por apellido con su número de libros |
+| 52 | Menú ⋯ de un libro → Editar autor | El libro pasa al autor correcto |
+| 53 | Cerrar y reabrir la app | Recuerda si estabas en Sagas o Autores |
 
 Anota lo que falle con el número de prueba y el modelo de celular.
 

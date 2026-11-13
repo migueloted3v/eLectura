@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -268,7 +268,7 @@ function Stats({ profile, log, books, goalMin, onGoal, onBack }) {
 }
 
 /* ================= Biblioteca ================= */
-function Library({ profile, books, onOpen, onImportClick, go, onBookAction, todaySec, goalMin, sagas, suggestions, onReviewSagas }) {
+function Library({ profile, books, onOpen, onImportClick, go, onBookAction, todaySec, goalMin, sagas, suggestions, onReviewSagas, libView, onLibView }) {
   const [filter, setFilter] = useState('todos');
   const [menuFor, setMenuFor] = useState(null);
   const current = books.slice().sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0)).find(b => b.hasFile && b.openedAt && !b.finished);
@@ -277,6 +277,8 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction, toda
   const langOk = b => filter === 'todos' || b.lang === filter;
   const shown = books.filter(b => !inSaga[b.fingerprint] && langOk(b));
   const shownSagas = sagas.filter(s => filter === 'todos' || s.items.some(it => byKey[it.key] && langOk(byKey[it.key])));
+  const byAuthor = libView === 'autores';
+  const authors = useMemo(() => groupAuthors(books.filter(langOk)), [books, filter]);
   return (
     <div className="screen">
       <header className="lib-head">
@@ -308,13 +310,17 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction, toda
           </button>
         )}
 
+        {books.length > 0 && (
+          <Segmented label="Ver biblioteca por" value={byAuthor ? 'autores' : 'sagas'} onChange={onLibView}
+            options={[{ id: 'sagas', label: 'Sagas' }, { id: 'autores', label: 'Autores' }]} />
+        )}
         <div className="row-between">
-          <h2 className="h2">Tus libros</h2>
+          <h2 className="h2">{byAuthor ? 'Tus autores' : 'Tus libros'}</h2>
           <Segmented label="Filtrar por idioma" value={filter} onChange={setFilter}
             options={[{ id: 'todos', label: 'Todos' }, { id: 'es', label: 'Español' }, { id: 'en', label: 'Inglés' }]} />
         </div>
 
-        {suggestions.length > 0 && (
+        {!byAuthor && suggestions.length > 0 && (
           <div className="saga-banner">
             <IFolder />
             <span className="grow">Encontré {suggestions.length === 1 ? '1 saga' : suggestions.length + ' sagas'} en tus libros</span>
@@ -325,6 +331,23 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction, toda
         {books.length === 0 ? (
           <div className="empty">
             <p>Tu biblioteca está vacía. Busca un libro gratuito o abre un EPUB o PDF desde tu celular o tu nube.</p>
+          </div>
+        ) : byAuthor ? (
+          <div className="grid3">
+            {authors.map(a => {
+              const read = a.books.filter(b => b.finished).length;
+              return (
+                <div key={a.key} className="book-cell">
+                  <button type="button" className="cover-btn" onClick={() => go('author', a.key)} aria-label={'Ver libros de ' + a.name}>
+                    {a.books.length > 1
+                      ? <SagaCover saga={{ name: a.name, items: a.books.map(b => ({ key: b.fingerprint, title: b.title })) }} byKey={byKey} />
+                      : <Cover book={a.books[0]} />}
+                  </button>
+                  <span className="saga-name">{a.name}</span>
+                  <span className="muted small">{a.books.length} {a.books.length === 1 ? 'libro' : 'libros'} · {read} leídos</span>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="grid3">
@@ -371,6 +394,7 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction, toda
               {menuFor.finished ? 'Marcar como no terminado' : 'Marcar como terminado'}
             </button>
             <button type="button" className="btn" onClick={() => { onBookAction('saga', menuFor); setMenuFor(null); }}>Mover a una saga…</button>
+            <button type="button" className="btn" onClick={() => { onBookAction('author', menuFor); setMenuFor(null); }}>Editar autor</button>
             {menuFor.hasFile && menuFor.format === 'pdf' && <button type="button" className="btn primary" onClick={() => { onBookAction('convert', menuFor); setMenuFor(null); }}>Convertir a EPUB</button>}
             {menuFor.hasFile && menuFor.format === 'epub' && <button type="button" className="btn" onClick={() => { onBookAction('download', menuFor); setMenuFor(null); }}>Descargar EPUB</button>}
             {menuFor.hasFile && <button type="button" className="btn" onClick={() => { onBookAction('free', menuFor); setMenuFor(null); }}>Quitar del cel (conserva el progreso)</button>}
@@ -378,6 +402,62 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction, toda
           </div>
         </Sheet>
       )}
+    </div>
+  );
+}
+
+/* ================= Autores ================= */
+// "Gibson, William" y "William Gibson" son el mismo autor; se usa el primer autor si hay varios.
+function authorName(raw) {
+  let a = String(raw || '').split(/\s*(?:;|&|\band\b)\s*/i)[0].trim().replace(/\s+/g, ' ');
+  const parts = a.split(',').map(x => x.trim()).filter(Boolean);
+  if (parts.length === 2 && !/\s/.test(parts[0]) || parts.length === 2 && parts[1].split(' ').length <= 3 && parts[0].split(' ').length <= 2) a = parts[1] + ' ' + parts[0];
+  return a || 'Autor desconocido';
+}
+const authorKey = name => name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+function groupAuthors(books) {
+  const g = {};
+  books.forEach(b => {
+    const name = authorName(b.author), key = authorKey(name);
+    (g[key] = g[key] || { key, name, books: [] }).books.push(b);
+  });
+  const last = n => n === 'Autor desconocido' ? '￿' : n.split(' ').slice(-1)[0];
+  return Object.values(g).map(a => ({ ...a, books: a.books.slice().sort((x, y) => x.title.localeCompare(y.title, 'es')) }))
+    .sort((x, y) => last(x.name).localeCompare(last(y.name), 'es') || x.name.localeCompare(y.name, 'es'));
+}
+function AuthorView({ authorKey: key, books, onBack, onOpen }) {
+  const a = groupAuthors(books).find(x => x.key === key);
+  if (!a) return <div className="screen"><TopBar title="" onBack={onBack} /><div className="content"><p className="muted">Ya no hay libros de este autor.</p></div></div>;
+  const byKey = {}; a.books.forEach(b => { if (b.fingerprint) byKey[b.fingerprint] = b; });
+  const read = a.books.filter(b => b.finished).length;
+  return (
+    <div className="screen">
+      <TopBar title="" onBack={onBack} />
+      <div className="content">
+        <div className="row-inline saga-head">
+          {a.books.length > 1 ? <SagaCover saga={{ name: a.name, items: a.books.map(b => ({ key: b.fingerprint, title: b.title })) }} byKey={byKey} height={118} /> : <span className="saga-stack" style={{ height: 118 }}><Cover book={a.books[0]} height={118} /></span>}
+          <div className="stack-sm grow">
+            <span className="serif strong saga-title">{a.name}</span>
+            <span className="muted small">{a.books.length} {a.books.length === 1 ? 'libro' : 'libros'} · {read} de {a.books.length} leídos</span>
+            <span className="bar"><span style={{ width: Math.round(read / a.books.length * 100) + '%' }} /></span>
+          </div>
+        </div>
+        <div className="stack-sm">
+          {a.books.map(b => {
+            const p = b.finished ? 1 : (b.progress && b.progress.percent) || 0;
+            return (
+              <button key={b.id} type="button" className="saga-row card saga-open author-row" onClick={() => onOpen(b)}>
+                <Cover book={b} height={56} />
+                <span className="stack-xs grow left">
+                  <span className="serif strong">{b.title}</span>
+                  <span className="muted tiny">{b.finished ? 'Terminado' : (p > 0 ? Math.round(p * 100) + ' %' : 'Sin empezar') + (b.hasFile ? '' : ' · en tu nube')}{b.series ? ' · ' + b.series + (b.seriesIndex ? ' #' + b.seriesIndex : '') : ''}</span>
+                  <span className="bar thin"><span style={{ width: Math.round(p * 100) + '%' }} /></span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -574,6 +654,18 @@ function SagaView({ saga, books, onBack, onOpen, onChange, onUndo, onMissing }) 
         </Sheet>
       )}
     </div>
+  );
+}
+
+function AuthorEditSheet({ book, onSave, onClose }) {
+  const [name, setName] = useState(book.author || '');
+  return (
+    <Sheet label="Editar autor" onClose={onClose}>
+      <div className="sheet-title">Editar autor</div>
+      <p className="muted small ellipsis">{book.title}</p>
+      <input className="input" value={name} maxLength={120} placeholder="Nombre y apellido" aria-label="Autor" onChange={e => setName(e.target.value)} />
+      <button type="button" className="btn primary" onClick={() => onSave(name.trim())}>Guardar</button>
+    </Sheet>
   );
 }
 
@@ -1930,6 +2022,7 @@ function App() {
   const bookAction = (action, b) => {
     const done = () => refreshBooks();
     if (action === 'saga') { setSagaSheet({ type: 'pick', book: b }); return; }
+    if (action === 'author') { setSagaSheet({ type: 'author', book: b }); return; }
     if (action === 'finish') Svc.updateBook({ ...b, finished: !b.finished, finishedAt: !b.finished ? Date.now() : null }).then(done);
     if (action === 'free') Svc.freeBook(b).then(() => { toast('Quitado del cel. Bájalo de tu nube cuando quieras seguir.'); done(); });
     if (action === 'delete') Svc.deleteBook(b).then(() => {
@@ -2134,6 +2227,8 @@ function App() {
     screen = <Settings settings={settings} onChange={setSettings} profile={profile} profiles={profiles} sources={sources} go={go}
       onBack={() => go('library')} onExport={exportBackup} onImportBackup={importBackup} onDeleteProfile={deleteProfile} vocabCount={vocab.length} quotesCount={quotes.length} books={books}
       syncInfo={syncInfo} onSync={() => runSync('manual')} />;
+  } else if (view.name === 'author') {
+    screen = <AuthorView authorKey={view.tab} books={books} onBack={() => go('library')} onOpen={openBook} />;
   } else if (view.name === 'saga' && sagas.find(s => s.id === view.tab)) {
     screen = <SagaView key={view.tab} saga={sagas.find(s => s.id === view.tab)} books={books} onBack={() => go('library')} onOpen={openBook}
       onChange={saveSaga} onUndo={undoSaga} onMissing={() => { toast('Ese libro no está en este aparato. Búscalo en Mi nube o en tus fuentes.'); go('discover', 'cloud'); }} />;
@@ -2146,7 +2241,8 @@ function App() {
   } else {
     screen = <Library profile={profile} books={books} onOpen={openBook} onImportClick={() => fileRef.current.click()} go={go} onBookAction={bookAction}
       todaySec={Reading.secOf(mergedLog, new Date())} goalMin={settings.goalMin || 10}
-      sagas={sagas} suggestions={suggestions} onReviewSagas={() => setSagaSheet({ type: 'suggest' })} />;
+      sagas={sagas} suggestions={suggestions} onReviewSagas={() => setSagaSheet({ type: 'suggest' })}
+      libView={settings.libView || 'sagas'} onLibView={v => setSettings({ ...settings, libView: v })} />;
   }
 
   return (
@@ -2168,6 +2264,10 @@ function App() {
       {sagaSheet && sagaSheet.type === 'suggest' && (
         <SagaSuggestSheet suggestions={suggestions} onClose={() => setSagaSheet(null)}
           onCreate={sg => { createSagaFrom(sg.name, sg.books); toast('Saga creada: ' + sg.name); }} onIgnore={dismissSuggestion} />
+      )}
+      {sagaSheet && sagaSheet.type === 'author' && (
+        <AuthorEditSheet book={sagaSheet.book} onClose={() => setSagaSheet(null)}
+          onSave={name => { Svc.updateBook({ ...sagaSheet.book, author: name }).then(refreshBooks); setSagaSheet(null); toast('Autor actualizado.'); }} />
       )}
       {sagaSheet && sagaSheet.type === 'pick' && (
         <SagaPickSheet book={sagaSheet.book} sagas={sagas} current={sagaOf(sagaSheet.book)} onClose={() => setSagaSheet(null)}

@@ -140,6 +140,8 @@ Hazlas en al menos un iPhone y un Android.
 | 52 | Menú ⋯ de un libro → Editar autor | El libro pasa al autor correcto |
 | 53 | Cerrar y reabrir la app | Recuerda si estabas en Sagas o Autores |
 | 54 | Biblioteca → Nueva saga → nombre → marcar libros en orden | Se crea la carpeta con ese orden |
+| 55 | Autores → Autor desconocido → ⋯ de un libro → Cambiar de autor | Propone separar "Autor - Título"; el libro pasa a la carpeta del autor |
+| 56 | Dentro de una saga → ⋯ de un libro → Mover a otra saga o crear una nueva | El libro cambia de carpeta |
 
 Anota lo que falle con el número de prueba y el modelo de celular.
 

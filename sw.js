@@ -1,7 +1,7 @@
 /* eLectura · service worker.
    La app abre al instante desde lo guardado en el cel (con o sin internet)
    y se actualiza en segundo plano. Al publicar cambios, sube VERSION. */
-const VERSION = 'electura-v1.5.2';
+const VERSION = 'electura-v1.5.3';
 const SHELL = ['./', 'index.html', 'app.js', 'services.js', 'converter.js', 'reading.js', 'sync.js', 'config.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 const LIBS = [

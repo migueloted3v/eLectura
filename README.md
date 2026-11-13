@@ -46,7 +46,9 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 **Ver por autor**
 - Selector Sagas | Autores en la biblioteca (recuerda el último usado).
 - Autores en orden alfabético por apellido, cada uno como pila con sus libros y cuántos llevas leídos; incluye los libros que están dentro de sagas.
-- Junta variantes del mismo nombre ("Gibson, William" = "William Gibson"); menú ⋯ del libro → Editar autor para corregir o completar.
+- Junta variantes del mismo nombre ("Gibson, William" = "William Gibson").
+- Cada libro, en la biblioteca o dentro de cualquier carpeta (autor o saga), tiene ⋯ para cambiarlo de autor, corregir su título, moverlo a otra saga, crear una saga nueva o sacarlo de la saga.
+- Si el título trae el autor ("William Gibson - Neuromancer"), la app propone separarlos con un toque.
 
 **Medidor de lectura**
 - Cuenta solo la lectura activa: el tiempo corre con el libro en pantalla y se pausa si pasan 2 minutos sin cambiar de página o tocar la pantalla.

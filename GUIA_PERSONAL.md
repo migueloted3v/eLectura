@@ -90,6 +90,13 @@ Tus hijas no necesitan activarlo: si no lo activan, su app nunca se conecta a Go
 
 Opcional en Google Cloud → *Acceso a datos*: cambia `drive.readonly` por `.../auth/drive`. En modo prueba funciona aunque no lo cambies.
 
+## 5d. Tus libros en el iPhone desde Google Drive
+
+Usa **eLectura → Buscar libros → Mi nube → Google Drive** (no el selector de Archivos de iOS): así el libro queda enlazado a tu carpeta y recibe las correcciones de tus otros aparatos.
+
+- Si ya tenías el libro abierto desde iCloud u otro lugar, al conectar Google la app lo reconoce en tu Drive, lo enlaza y baja la versión corregida, sin subir copias.
+- Opcional, para ver Google Drive también en el selector de Archivos de iOS: instala la app **Google Drive** de la App Store, inicia sesión, y en la app **Archivos → Explorar → ⋯ → Editar** activa **Google Drive**.
+
 ## 6. Pruebas de la v1
 
 Hazlas en al menos un iPhone y un Android.
@@ -160,6 +167,7 @@ Hazlas en al menos un iPhone y un Android.
 | 62 | Familiar baja un libro corregido | Lo ve con título, autor, portada y le sugiere la saga |
 | 63 | Corregir en la tablet, abrir el cel con sincronización | El cel muestra el título, autor y portada nuevos |
 | 64 | Inicio de la app | Junto al ícono de Ajustes se ve la versión |
+| 65 | Cel con libros abiertos desde iCloud → conectar Google | No aparecen copias nuevas en eBooks y el cel muestra las correcciones de la tablet |
 
 Anota lo que falle con el número de prueba y el modelo de celular.
 

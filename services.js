@@ -451,7 +451,7 @@
       var parents = d.files.map(function (f) { return "'" + f.id + "' in parents"; }).join(' or ');
       var query = '(' + parents + ") and trashed=false and (mimeType='application/epub+zip' or mimeType='application/pdf' or name contains '.epub' or name contains '.pdf')";
       if (q) query += " and name contains '" + q.replace(/'/g, "\\'") + "'";
-      return driveFetch('files?pageSize=100&orderBy=name&fields=files(id,name,size,mimeType)&q=' + encodeURIComponent(query));
+      return driveFetch('files?pageSize=1000&orderBy=name&fields=files(id,name,size,mimeType,appProperties)&q=' + encodeURIComponent(query));
     }).then(function (r) { return r.json(); }).then(function (d) { return d.files || []; });
   }
   function driveDownload(file) {
@@ -471,13 +471,19 @@
       return targetFolder;
     });
   }
-  function driveUpdateFile(id, blob, mime) {
-    return driveFetch('files/' + id + '?uploadType=media&fields=id,size', { method: 'PATCH', headers: { 'Content-Type': mime }, body: blob },
+  // Cada archivo lleva en Drive la identidad del libro (appProperties) para no duplicarlo nunca.
+  function driveUpdateFile(id, blob, mime, eid) {
+    var meta = eid ? JSON.stringify({ appProperties: { electuraId: eid } }) : '{}';
+    var boundary = 'electura' + Date.now();
+    var body = new Blob(['--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta +
+      '\r\n--' + boundary + '\r\nContent-Type: ' + mime + '\r\n\r\n', blob, '\r\n--' + boundary + '--']);
+    return driveFetch('files/' + id + '?uploadType=multipart&fields=id,size', { method: 'PATCH', headers: { 'Content-Type': 'multipart/related; boundary=' + boundary }, body: body },
       'https://www.googleapis.com/upload/drive/v3/').then(function (r) { return r.json(); });
   }
-  function driveCreateFile(folderId, name, blob, mime) {
+  function driveCreateFile(folderId, name, blob, mime, eid) {
     var boundary = 'electura' + Date.now();
     var meta = { name: name, parents: [folderId], mimeType: mime };
+    if (eid) meta.appProperties = { electuraId: eid };
     var body = new Blob(['--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta) +
       '\r\n--' + boundary + '\r\nContent-Type: ' + mime + '\r\n\r\n', blob, '\r\n--' + boundary + '--']);
     return driveFetch('files?uploadType=multipart&fields=id,size', { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + boundary }, body: body },

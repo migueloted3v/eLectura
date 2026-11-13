@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.7.1';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -2340,21 +2340,40 @@ function App() {
       if (!queue.length) return;
       let remoteFiles = null;
       const findRemote = b => (remoteFiles ? Promise.resolve(remoteFiles) : Svc.driveList('').then(f => (remoteFiles = f)).catch(() => (remoteFiles = [])))
-        .then(files => { const f = files.find(x => Svc.fingerprintOf(x.name, Number(x.size)) === b.fingerprint); return f ? f.id : null; });
-      return queue.reduce((p, b) => p.then(() => Promise.all([Svc.getFile(b.id), b.coverFromWeb ? Svc.getCover(b.id) : null]).then(([blob, cover]) => {
+        .then(files => {
+          // Mismo libro en Drive: por su identidad, por nombre y tamaño, o por el nombre original del archivo.
+          const base = String(b.fingerprint || '').split('|')[0];
+          const f = files.find(x => x.appProperties && x.appProperties.electuraId === b.fingerprint)
+            || files.find(x => Svc.fingerprintOf(x.name, Number(x.size)) === b.fingerprint)
+            || files.find(x => Svc.cleanName(x.name).toLowerCase() === base);
+          return f ? f.id : null;
+        });
+      // Libro que ya existe en Drive y aquí no tiene correcciones: se enlaza y se baja la versión de Drive (no se sube otra copia ni se pisa).
+      const linkAndPull = (b, id) => Svc.driveDownload({ id }).then(blob => Svc.saveBookFromBlob(blob, b.title + '.' + b.format, pid, { driveFileId: id }))
+        .then(res => {
+          const m = res.meta;
+          const keep = { progress: m.progress || b.progress, openedAt: Math.max(m.openedAt || 0, b.openedAt || 0) || null, locations: m.id === b.id ? m.locations : null, finished: m.finished || b.finished };
+          return Svc.updateBook({ ...m, ...keep, driveFileId: id, driveDirty: false, drivePushedAt: Date.now() })
+            .then(() => (m.id !== b.id ? Svc.deleteBook(b) : null));
+        });
+      return queue.reduce((p, b) => p.then(() => (b.driveFileId ? Promise.resolve(null) : findRemote(b)).then(found => {
+        const hasEdits = !!(b.metaAt || b.coverFromWeb || b.seriesFromApp);
+        if (found && !hasEdits) return linkAndPull(b, found).then(() => setDriveInfo(i => ({ ...i, pending: Math.max(0, i.pending - 1) })));
+        return Promise.all([Svc.getFile(b.id), b.coverFromWeb ? Svc.getCover(b.id) : null]).then(([blob, cover]) => {
         if (!blob) return;
         const mime = b.format === 'pdf' ? 'application/pdf' : 'application/epub+zip';
         const out = b.format === 'epub'
           ? Conv.rewriteEpub(blob, { title: b.title, author: b.author, series: b.series, seriesIndex: b.seriesIndex, cover: cover, eid: b.fingerprint }).catch(() => blob)
           : Promise.resolve(blob);
-        return out.then(file => (b.driveFileId ? Promise.resolve(b.driveFileId) : findRemote(b)).then(id => {
+        return out.then(file => Promise.resolve(b.driveFileId || found).then(id => {
           const name = (b.author ? authorName(b.author) + ' - ' : '') + b.title.replace(/[\\/:*?"<>|]+/g, ' ') + '.' + b.format;
-          const create = () => Svc.driveTargetFolder().then(folder => Svc.driveCreateFile(folder, name, file, mime));
-          return (id ? Svc.driveUpdateFile(id, file, mime).catch(e => (/404/.test(e.message) ? create() : Promise.reject(e))) : create());
+          const create = () => Svc.driveTargetFolder().then(folder => Svc.driveCreateFile(folder, name, file, mime, b.fingerprint));
+          return (id ? Svc.driveUpdateFile(id, file, mime, b.fingerprint).catch(e => (/404/.test(e.message) ? create() : Promise.reject(e))) : create());
         })).then(res => Svc.listBooks(pid).then(cur => {
           const now = cur.find(x => x.id === b.id) || b;
           return Svc.updateBook({ ...now, driveFileId: res.id, driveDirty: false, drivePushedAt: Date.now() });
         })).then(() => setDriveInfo(i => ({ ...i, pending: Math.max(0, i.pending - 1) })));
+        });
       })), Promise.resolve()).then(() => { setDriveInfo({ status: 'ok', pending: 0, at: Date.now() }); return refreshBooks(); });
     }).catch(e => {
       setDriveInfo(i => ({ ...i, status: e.code === 'auth' || e.code === 'scope' ? 'needs-auth' : 'error', error: e.message }));

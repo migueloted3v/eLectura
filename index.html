@@ -175,6 +175,10 @@ g.hl-ul rect{stroke:none!important}
 .check-row{cursor:pointer}.check-row input{width:22px;height:22px;accent-color:var(--accent)}
 .author-row{width:100%;border:1px solid var(--line);text-align:left;padding:8px 12px}
 .author-row .cover{width:40px;flex-shrink:0;padding:0}
+.view-row{align-items:center}.view-row .segmented{width:100%}
+.new-saga{min-height:40px;flex-shrink:0;padding:0 10px;display:inline-flex;align-items:center;gap:6px;font-size:13px}.new-saga svg{width:16px;height:16px}
+.saga-count.static{position:static;flex-shrink:0}
+.pick-list{max-height:46vh;overflow:auto}
 .cover-btn.pick.on{outline:3px solid var(--accent);border-radius:8px}
 .today-chip{margin-top:6px;display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:4px 12px 4px 6px;border-radius:18px;border:1px solid var(--line);background:var(--sheet);font-size:13px;font-weight:500}
 .ring{position:relative;display:inline-flex;flex-shrink:0}.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
@@ -223,8 +227,8 @@ g.hl-ul line{stroke:inherit!important;stroke-width:3px!important;stroke-opacity:
 </head>
 <body>
 <div id="root"><div class="center-fill muted">Cargando…</div></div>
-<script>window.ELECTURA_SHELL = '1.5.1';</script>
-<script src="config.js?v=1.5.1"></script>
+<script>window.ELECTURA_SHELL = '1.5.2';</script>
+<script src="config.js?v=1.5.2"></script>
 <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.5/babel.min.js"></script>
@@ -234,11 +238,11 @@ g.hl-ul line{stroke:inherit!important;stroke-width:3px!important;stroke-opacity:
 <script>
   if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 </script>
-<script src="services.js?v=1.5.1"></script>
-<script src="converter.js?v=1.5.1"></script>
-<script src="reading.js?v=1.5.1"></script>
-<script src="sync.js?v=1.5.1"></script>
-<script type="text/babel" data-presets="react" src="app.js?v=1.5.1"></script>
+<script src="services.js?v=1.5.2"></script>
+<script src="converter.js?v=1.5.2"></script>
+<script src="reading.js?v=1.5.2"></script>
+<script src="sync.js?v=1.5.2"></script>
+<script type="text/babel" data-presets="react" src="app.js?v=1.5.2"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {

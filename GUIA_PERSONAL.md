@@ -139,6 +139,7 @@ Hazlas en al menos un iPhone y un Android.
 | 51 | Biblioteca → Autores | Autores por apellido con su número de libros |
 | 52 | Menú ⋯ de un libro → Editar autor | El libro pasa al autor correcto |
 | 53 | Cerrar y reabrir la app | Recuerda si estabas en Sagas o Autores |
+| 54 | Biblioteca → Nueva saga → nombre → marcar libros en orden | Se crea la carpeta con ese orden |
 
 Anota lo que falle con el número de prueba y el modelo de celular.
 

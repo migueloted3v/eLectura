@@ -1,7 +1,7 @@
 /* eLectura · interfaz (React + JSX vía Babel en el navegador) */
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 const CFG = window.ELECTURA_CONFIG || {};
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.5.2';
 
 /* ================= Temas y comodidad ================= */
 const PALETTE = {
@@ -268,7 +268,7 @@ function Stats({ profile, log, books, goalMin, onGoal, onBack }) {
 }
 
 /* ================= Biblioteca ================= */
-function Library({ profile, books, onOpen, onImportClick, go, onBookAction, todaySec, goalMin, sagas, suggestions, onReviewSagas, libView, onLibView }) {
+function Library({ profile, books, onOpen, onImportClick, go, onBookAction, todaySec, goalMin, sagas, suggestions, onReviewSagas, libView, onLibView, onNewSaga }) {
   const [filter, setFilter] = useState('todos');
   const [menuFor, setMenuFor] = useState(null);
   const current = books.slice().sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0)).find(b => b.hasFile && b.openedAt && !b.finished);
@@ -311,8 +311,11 @@ function Library({ profile, books, onOpen, onImportClick, go, onBookAction, toda
         )}
 
         {books.length > 0 && (
-          <Segmented label="Ver biblioteca por" value={byAuthor ? 'autores' : 'sagas'} onChange={onLibView}
-            options={[{ id: 'sagas', label: 'Sagas' }, { id: 'autores', label: 'Autores' }]} />
+          <div className="row-gap view-row">
+            <span className="grow"><Segmented label="Ver biblioteca por" value={byAuthor ? 'autores' : 'sagas'} onChange={onLibView}
+              options={[{ id: 'sagas', label: 'Sagas' }, { id: 'autores', label: 'Autores' }]} /></span>
+            {!byAuthor && books.length > 1 && <button type="button" className="chip new-saga" onClick={onNewSaga}><IFolder /> Nueva saga</button>}
+          </div>
         )}
         <div className="row-between">
           <h2 className="h2">{byAuthor ? 'Tus autores' : 'Tus libros'}</h2>
@@ -654,6 +657,37 @@ function SagaView({ saga, books, onBack, onOpen, onChange, onUndo, onMissing }) 
         </Sheet>
       )}
     </div>
+  );
+}
+
+function NewSagaSheet({ books, onCreate, onClose }) {
+  const [name, setName] = useState('');
+  const [picked, setPicked] = useState({});
+  const n = Object.values(picked).filter(Boolean).length;
+  return (
+    <Sheet label="Nueva saga" onClose={onClose}>
+      <div className="sheet-title">Nueva saga</div>
+      <label htmlFor="saganame" className="field-label">Nombre</label>
+      <input id="saganame" className="input" value={name} maxLength={60} placeholder="Ej. Trilogía del Sprawl" onChange={e => setName(e.target.value)} />
+      <span className="field-label">Elige los libros en el orden en que se leen</span>
+      {books.length === 0 ? <p className="muted">Todos tus libros ya están en alguna saga.</p> : (
+        <div className="card list pick-list">
+          {books.map(b => (
+            <label key={b.id} className="row check-row">
+              <input type="checkbox" checked={!!picked[b.id]} onChange={e => setPicked(p => {
+                const next = { ...p }; if (e.target.checked) next[b.id] = Date.now(); else delete next[b.id]; return next;
+              })} />
+              <span className="grow stack-xs"><span className="ellipsis">{b.title}</span><span className="muted tiny">{b.author || 'Autor desconocido'}</span></span>
+              {picked[b.id] && <span className="saga-count static">{Object.entries(picked).sort((a, c) => a[1] - c[1]).findIndex(([id]) => id === b.id) + 1}</span>}
+            </label>
+          ))}
+        </div>
+      )}
+      <button type="button" className="btn primary" disabled={!name.trim() || n === 0} onClick={() => {
+        const order = Object.entries(picked).sort((a, c) => a[1] - c[1]).map(([id]) => books.find(b => b.id === id)).filter(Boolean);
+        onCreate(name.trim(), order);
+      }}>Crear saga{n ? ' con ' + n + (n === 1 ? ' libro' : ' libros') : ''}</button>
+    </Sheet>
   );
 }
 
@@ -2242,7 +2276,7 @@ function App() {
     screen = <Library profile={profile} books={books} onOpen={openBook} onImportClick={() => fileRef.current.click()} go={go} onBookAction={bookAction}
       todaySec={Reading.secOf(mergedLog, new Date())} goalMin={settings.goalMin || 10}
       sagas={sagas} suggestions={suggestions} onReviewSagas={() => setSagaSheet({ type: 'suggest' })}
-      libView={settings.libView || 'sagas'} onLibView={v => setSettings({ ...settings, libView: v })} />;
+      libView={settings.libView || 'sagas'} onLibView={v => setSettings({ ...settings, libView: v })} onNewSaga={() => setSagaSheet({ type: 'new' })} />;
   }
 
   return (
@@ -2264,6 +2298,10 @@ function App() {
       {sagaSheet && sagaSheet.type === 'suggest' && (
         <SagaSuggestSheet suggestions={suggestions} onClose={() => setSagaSheet(null)}
           onCreate={sg => { createSagaFrom(sg.name, sg.books); toast('Saga creada: ' + sg.name); }} onIgnore={dismissSuggestion} />
+      )}
+      {sagaSheet && sagaSheet.type === 'new' && (
+        <NewSagaSheet books={books.filter(b => b.fingerprint && !sagaOf(b))} onClose={() => setSagaSheet(null)}
+          onCreate={(name, list) => { createSagaFrom(name, list); setSagaSheet(null); toast('Saga creada: ' + name + '. Ábrela para cambiar el orden si hace falta.'); }} />
       )}
       {sagaSheet && sagaSheet.type === 'author' && (
         <AuthorEditSheet book={sagaSheet.book} onClose={() => setSagaSheet(null)}

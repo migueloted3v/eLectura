@@ -38,6 +38,7 @@ Es una app web instalable (PWA): funciona en iPhone y Android, se instala en la 
 - Agrupa los libros de una saga en una carpeta. En la biblioteca se ve como una pila con la portada del primer libro que tenga imagen (o la que elijas) y cuántos llevas leídos.
 - Dentro de la carpeta, los libros van numerados en orden de lectura; mantén presionada la manija ≡ y arrastra para cambiar el orden.
 - Detecta sagas en los datos del EPUB (Calibre `calibre:series` y EPUB 3 `belongs-to-collection`) y sugiere las carpetas ya ordenadas por tomo; tú confirmas o ignoras.
+- Botón **Nueva saga** en la biblioteca: nombre y libros en el orden en que los marques.
 - Menú ⋯ del libro → Mover a una saga; menú de la carpeta → Renombrar, Elegir portada, Deshacer saga (los libros vuelven sueltos).
 - Al terminar un libro de una saga, ofrece abrir el siguiente (o buscarlo en Mi nube si no está en el aparato).
 - Las sagas se sincronizan entre aparatos.
